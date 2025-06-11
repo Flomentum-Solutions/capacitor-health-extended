@@ -75,6 +75,7 @@ npx cap sync
 * [`showHealthConnectInPlayStore()`](#showhealthconnectinplaystore)
 * [`queryAggregated(...)`](#queryaggregated)
 * [`queryWorkouts(...)`](#queryworkouts)
+* [`queryLatestSample(...)`](#querylatestsample)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 
@@ -208,6 +209,23 @@ Query workouts
 --------------------
 
 
+### queryLatestSample(...)
+
+```typescript
+queryLatestSample(options: LatestSampleRequest) => Promise<LatestSampleResponse>
+```
+
+Query the latest single sample for the provided data type
+
+| Param         | Type                                                                | Description                               |
+| ------------- | ------------------------------------------------------------------- | ----------------------------------------- |
+| **`options`** | <code><a href="#latestsamplerequest">LatestSampleRequest</a></code> | options containing the data type to query |
+
+**Returns:** <code>Promise&lt;<a href="#latestsampleresponse">LatestSampleResponse</a>&gt;</code>
+
+--------------------
+
+
 ### Interfaces
 
 
@@ -243,12 +261,12 @@ Query workouts
 
 #### QueryAggregatedRequest
 
-| Prop            | Type                               |
-| --------------- | ---------------------------------- |
-| **`startDate`** | <code>string</code>                |
-| **`endDate`**   | <code>string</code>                |
-| **`dataType`**  | <code>'steps' \| 'calories'</code> |
-| **`bucket`**    | <code>string</code>                |
+| Prop            | Type                                                       |
+| --------------- | ---------------------------------------------------------- |
+| **`startDate`** | <code>string</code>                                        |
+| **`endDate`**   | <code>string</code>                                        |
+| **`dataType`**  | <code>'steps' \| 'active-calories' \| 'mindfulness'</code> |
+| **`bucket`**    | <code>string</code>                                        |
 
 
 #### QueryWorkoutResponse
@@ -269,6 +287,7 @@ Query workouts
 | **`id`**             | <code>string</code>            |
 | **`duration`**       | <code>number</code>            |
 | **`distance`**       | <code>number</code>            |
+| **`steps`**          | <code>number</code>            |
 | **`calories`**       | <code>number</code>            |
 | **`sourceBundleId`** | <code>string</code>            |
 | **`route`**          | <code>RouteSample[]</code>     |
@@ -301,6 +320,25 @@ Query workouts
 | **`endDate`**          | <code>string</code>  |
 | **`includeHeartRate`** | <code>boolean</code> |
 | **`includeRoute`**     | <code>boolean</code> |
+| **`includeSteps`**     | <code>boolean</code> |
+
+
+#### LatestSampleResponse
+
+| Prop            | Type                |
+| --------------- | ------------------- |
+| **`value`**     | <code>number</code> |
+| **`timestamp`** | <code>string</code> |
+| **`startDate`** | <code>string</code> |
+| **`endDate`**   | <code>string</code> |
+| **`unit`**      | <code>string</code> |
+
+
+#### LatestSampleRequest
+
+| Prop           | Type                                             |
+| -------------- | ------------------------------------------------ |
+| **`dataType`** | <code>'steps' \| 'heart-rate' \| 'weight'</code> |
 
 
 ### Type Aliases
@@ -308,6 +346,6 @@ Query workouts
 
 #### HealthPermission
 
-<code>'READ_STEPS' | 'READ_WORKOUTS' | 'READ_CALORIES' | 'READ_DISTANCE' | 'READ_HEART_RATE' | 'READ_ROUTE'</code>
+<code>'READ_STEPS' | 'READ_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'READ_DISTANCE' | 'READ_WEIGHT' | 'READ_HEART_RATE' | 'READ_ROUTE' | 'READ_MINDFULNESS'</code>
 
 </docgen-api>
