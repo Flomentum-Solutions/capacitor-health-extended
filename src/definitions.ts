@@ -102,7 +102,7 @@ export interface PermissionsRequest {
 }
 
 export interface PermissionResponse {
-  permissions: { [key: string]: boolean }[];
+  permissions: Record<HealthPermission, boolean>;
 }
 
 export interface QueryWorkoutRequest {

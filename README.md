@@ -38,7 +38,7 @@ npx cap sync
 
 * Make sure your app id has the 'HealthKit' entitlement when this plugin is installed (see iOS dev center).
 * Also, make sure your app and App Store description comply with the Apple review guidelines.
-* There are two keys to be added to the info.plist file: NSHealthShareUsageDescription and NSHealthUpdateUsageDescription. 
+* There are two keys to be added to the info.plist file: NSHealthShareUsageDescription and NSHealthUpdateUsageDescription.
 
 ### Android
 
@@ -340,7 +340,7 @@ Query latest steps sample
 
 | Prop              | Type                                       |
 | ----------------- | ------------------------------------------ |
-| **`permissions`** | <code>{ [key: string]: boolean; }[]</code> |
+| **`permissions`** | <code>Record<HealthPermission, boolean></code> |
 
 
 #### PermissionsRequest
