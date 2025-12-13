@@ -1,4 +1,4 @@
-# capacitor-health-extended
+# @flomentumsolutions/capacitor-health-extended
 
 Cross‑platform Capacitor plugin for reading data from Apple HealthKit and
 Google Health Connect. The plugin requires **Node.js 20+** and is compatible

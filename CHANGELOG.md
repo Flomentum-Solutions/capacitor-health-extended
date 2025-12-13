@@ -1,5 +1,5 @@
 # Changelog
-All notable changes to **capacitor-health-extended** will be documented in this file.  
+All notable changes to **@flomentumsolutions/capacitor-health-extended** will be documented in this file.  
 This project adheres to [Semantic Versioning](https://semver.org/) and the
 [Keep a Changelog](https://keepachangelog.com/) style guide.
 
