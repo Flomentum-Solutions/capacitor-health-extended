@@ -5,6 +5,34 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.3.0] – 2025-12-13  
+### Added
+- New cross-platform health types: resting heart rate, respiratory rate, oxygen saturation, blood glucose, body temperature (core + basal), body fat, basal calories, flights climbed, cycling distance, exercise time, and sleep sessions.
+- Android Health Connect permissions added for the new types, plus aggregation helpers for sleep/exercise time and floor counts.
+- iOS HealthKit mappings for the new quantities and sleep/latest queries with start/end timestamps.
+- Mindfulness now uses the dedicated MindfulnessSession record on Android (no longer reusing SleepSession) and the native `mindfulSession` category on iOS for latest samples.
+
+### Security
+- None
+
+---
+
+## [0.2.0] – 2025-12-13  
+### Added
+- Swift Package Manager distribution for Capacitor 8 iOS builds (via `Package.swift` + `capacitor-swift-pm`).
+
+### Changed
+- Peer dependency raised to Capacitor 8; toolchains updated to Swift 5.9/Xcode 15 and Android AGP 8.13 + Kotlin 2.2 (SDK 36 defaults).
+- HealthKit aggregation switch now covers new discrete aggregation styles to stay compatible with recent iOS releases.
+
+### Fixed
+- Workout queries now serialize heart-rate, route, and step aggregation to avoid races when building results.
+
+### Security
+- None
+
+---
+
 ## [1.0.0] – 2025-07-18  
 ### Added
 - **New Health types (iOS + Android)**  

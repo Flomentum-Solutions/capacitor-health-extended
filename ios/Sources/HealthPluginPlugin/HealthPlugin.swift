@@ -153,6 +153,68 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             healthStore.execute(query)
             return
         }
+        // ---- Special handling for sleep sessions (category samples) ----
+        if dataTypeString == "sleep" {
+            guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+                call.reject("Sleep type not available")
+                return
+            }
+            
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let predicate = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: .strictEndDate)
+            
+            let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, error in
+                guard let sleepSample = samples?.first as? HKCategorySample else {
+                    if let error = error {
+                        call.reject("Error fetching latest sleep sample", "NO_SAMPLE", error)
+                    } else {
+                        call.reject("No sleep sample found", "NO_SAMPLE")
+                    }
+                    return
+                }
+                let durationMinutes = sleepSample.endDate.timeIntervalSince(sleepSample.startDate) / 60
+                call.resolve([
+                    "value": durationMinutes,
+                    "timestamp": sleepSample.startDate.timeIntervalSince1970 * 1000,
+                    "endTimestamp": sleepSample.endDate.timeIntervalSince1970 * 1000,
+                    "unit": "min",
+                    "metadata": ["state": sleepSample.value]
+                ])
+            }
+            healthStore.execute(query)
+            return
+        }
+        // ---- Special handling for mindfulness sessions (category samples) ----
+        if dataTypeString == "mindfulness" {
+            guard let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession) else {
+                call.reject("Mindfulness type not available")
+                return
+            }
+            
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let predicate = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: .strictEndDate)
+            
+            let query = HKSampleQuery(sampleType: mindfulType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, error in
+                guard let mindfulSample = samples?.first as? HKCategorySample else {
+                    if let error = error {
+                        call.reject("Error fetching latest mindfulness sample", "NO_SAMPLE", error)
+                    } else {
+                        call.reject("No mindfulness sample found", "NO_SAMPLE")
+                    }
+                    return
+                }
+                let durationMinutes = mindfulSample.endDate.timeIntervalSince(mindfulSample.startDate) / 60
+                call.resolve([
+                    "value": durationMinutes,
+                    "timestamp": mindfulSample.startDate.timeIntervalSince1970 * 1000,
+                    "endTimestamp": mindfulSample.endDate.timeIntervalSince1970 * 1000,
+                    "unit": "min",
+                    "metadata": ["value": mindfulSample.value]
+                ])
+            }
+            healthStore.execute(query)
+            return
+        }
         guard aggregateTypeToHKQuantityType(dataTypeString) != nil else {
             call.reject("Invalid data type")
             return
@@ -162,6 +224,10 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             switch dataTypeString {
             case "heart-rate":
                 return HKObjectType.quantityType(forIdentifier: .heartRate)
+            case "resting-heart-rate":
+                return HKObjectType.quantityType(forIdentifier: .restingHeartRate)
+            case "respiratory-rate":
+                return HKObjectType.quantityType(forIdentifier: .respiratoryRate)
             case "weight":
                 return HKObjectType.quantityType(forIdentifier: .bodyMass)
             case "steps":
@@ -172,12 +238,30 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 return HKObjectType.quantityType(forIdentifier: .height)
             case "distance":
                 return HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)
+            case "distance-cycling":
+                return HKObjectType.quantityType(forIdentifier: .distanceCycling)
             case "active-calories":
                 return HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
             case "total-calories":
                 return HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
+            case "basal-calories":
+                return HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
             case "blood-pressure":
                 return nil // handled above
+            case "oxygen-saturation":
+                return HKObjectType.quantityType(forIdentifier: .oxygenSaturation)
+            case "blood-glucose":
+                return HKObjectType.quantityType(forIdentifier: .bloodGlucose)
+            case "body-temperature":
+                return HKObjectType.quantityType(forIdentifier: .bodyTemperature)
+            case "basal-body-temperature":
+                return HKObjectType.quantityType(forIdentifier: .basalBodyTemperature)
+            case "body-fat":
+                return HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)
+            case "flights-climbed":
+                return HKObjectType.quantityType(forIdentifier: .flightsClimbed)
+            case "exercise-time":
+                return HKObjectType.quantityType(forIdentifier: .appleExerciseTime)
             default:
                 return nil
             }
@@ -209,16 +293,36 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             var unit: HKUnit = .count()
             if dataTypeString == "heart-rate" {
                 unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+            } else if dataTypeString == "resting-heart-rate" {
+                unit = HKUnit.count().unitDivided(by: HKUnit.minute())
             } else if dataTypeString == "weight" {
                 unit = .gramUnit(with: .kilo)
             } else if dataTypeString == "hrv" {
                 unit = HKUnit.secondUnit(with: .milli)
             } else if dataTypeString == "distance" {
                 unit = HKUnit.meter()
+            } else if dataTypeString == "distance-cycling" {
+                unit = HKUnit.meter()
             } else if dataTypeString == "active-calories" || dataTypeString == "total-calories" {
+                unit = HKUnit.kilocalorie()
+            } else if dataTypeString == "basal-calories" {
                 unit = HKUnit.kilocalorie()
             } else if dataTypeString == "height" {
                 unit = HKUnit.meter()
+            } else if dataTypeString == "oxygen-saturation" {
+                unit = HKUnit.percent()
+            } else if dataTypeString == "blood-glucose" {
+                unit = HKUnit(from: "mg/dL")
+            } else if dataTypeString == "body-temperature" || dataTypeString == "basal-body-temperature" {
+                unit = HKUnit.degreeCelsius()
+            } else if dataTypeString == "body-fat" {
+                unit = HKUnit.percent()
+            } else if dataTypeString == "flights-climbed" {
+                unit = HKUnit.count()
+            } else if dataTypeString == "exercise-time" {
+                unit = HKUnit.minute()
+            } else if dataTypeString == "respiratory-rate" {
+                unit = HKUnit.count().unitDivided(by: HKUnit.minute())
             }
             let value = quantitySample.quantity.doubleValue(for: unit)
             let timestamp = quantitySample.startDate.timeIntervalSince1970 * 1000
@@ -317,6 +421,8 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return [HKObjectType.workoutType()].compactMap{$0}
         case "READ_HEART_RATE":
             return  [HKObjectType.quantityType(forIdentifier: .heartRate)].compactMap{$0}
+        case "READ_RESTING_HEART_RATE":
+            return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 }
         case "READ_ROUTE":
             return  [HKSeriesType.workoutRoute()].compactMap{$0}
         case "READ_DISTANCE":
@@ -335,6 +441,28 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic),
                 HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)
             ].compactMap { $0 }
+        case "READ_RESPIRATORY_RATE":
+            return [HKObjectType.quantityType(forIdentifier: .respiratoryRate)].compactMap { $0 }
+        case "READ_OXYGEN_SATURATION":
+            return [HKObjectType.quantityType(forIdentifier: .oxygenSaturation)].compactMap { $0 }
+        case "READ_BLOOD_GLUCOSE":
+            return [HKObjectType.quantityType(forIdentifier: .bloodGlucose)].compactMap { $0 }
+        case "READ_BODY_TEMPERATURE":
+            return [HKObjectType.quantityType(forIdentifier: .bodyTemperature)].compactMap { $0 }
+        case "READ_BASAL_BODY_TEMPERATURE":
+            return [HKObjectType.quantityType(forIdentifier: .basalBodyTemperature)].compactMap { $0 }
+        case "READ_BODY_FAT":
+            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 }
+        case "READ_FLOORS_CLIMBED":
+            return [HKObjectType.quantityType(forIdentifier: .flightsClimbed)].compactMap { $0 }
+        case "READ_BASAL_CALORIES":
+            return [
+                HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
+            ].compactMap { $0 }
+        case "READ_SLEEP":
+            return [HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!].compactMap { $0 }
+        case "READ_EXERCISE_TIME":
+            return [HKObjectType.quantityType(forIdentifier: .appleExerciseTime)].compactMap { $0 }
         // Add common alternative permission names
         case "steps":
             return [HKObjectType.quantityType(forIdentifier: .stepCount)].compactMap{$0}
@@ -371,6 +499,26 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic),
                 HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)
             ].compactMap { $0 }
+        case "respiratory-rate":
+            return [HKObjectType.quantityType(forIdentifier: .respiratoryRate)].compactMap { $0 }
+        case "oxygen-saturation":
+            return [HKObjectType.quantityType(forIdentifier: .oxygenSaturation)].compactMap { $0 }
+        case "blood-glucose":
+            return [HKObjectType.quantityType(forIdentifier: .bloodGlucose)].compactMap { $0 }
+        case "body-temperature":
+            return [HKObjectType.quantityType(forIdentifier: .bodyTemperature)].compactMap { $0 }
+        case "basal-body-temperature":
+            return [HKObjectType.quantityType(forIdentifier: .basalBodyTemperature)].compactMap { $0 }
+        case "body-fat":
+            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 }
+        case "flights-climbed":
+            return [HKObjectType.quantityType(forIdentifier: .flightsClimbed)].compactMap { $0 }
+        case "basal-calories":
+            return [HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)].compactMap { $0 }
+        case "exercise-time":
+            return [HKObjectType.quantityType(forIdentifier: .appleExerciseTime)].compactMap { $0 }
+        case "sleep":
+            return [HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!].compactMap { $0 }
         default:
             print("⚡️ [HealthPlugin] Unknown permission: \(permission)")
             return []
@@ -385,16 +533,38 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
         case "heart-rate":
             return HKObjectType.quantityType(forIdentifier: .heartRate)
+        case "resting-heart-rate":
+            return HKObjectType.quantityType(forIdentifier: .restingHeartRate)
         case "weight":
             return HKObjectType.quantityType(forIdentifier: .bodyMass)
         case "hrv":
             return HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)
         case "distance":
             return HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)  // pick one rep type
+        case "distance-cycling":
+            return HKObjectType.quantityType(forIdentifier: .distanceCycling)
         case "total-calories":
             return HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
+        case "basal-calories":
+            return HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
         case "height":
             return HKObjectType.quantityType(forIdentifier: .height)
+        case "respiratory-rate":
+            return HKObjectType.quantityType(forIdentifier: .respiratoryRate)
+        case "oxygen-saturation":
+            return HKObjectType.quantityType(forIdentifier: .oxygenSaturation)
+        case "blood-glucose":
+            return HKObjectType.quantityType(forIdentifier: .bloodGlucose)
+        case "body-temperature":
+            return HKObjectType.quantityType(forIdentifier: .bodyTemperature)
+        case "basal-body-temperature":
+            return HKObjectType.quantityType(forIdentifier: .basalBodyTemperature)
+        case "body-fat":
+            return HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)
+        case "flights-climbed":
+            return HKObjectType.quantityType(forIdentifier: .flightsClimbed)
+        case "exercise-time":
+            return HKObjectType.quantityType(forIdentifier: .appleExerciseTime)
         default:
             return nil
         }
@@ -415,6 +585,16 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         if dataTypeString == "mindfulness" {
             self.queryMindfulnessAggregated(startDate: startDate, endDate: endDate) { result, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        call.reject(error.localizedDescription)
+                    } else if let result = result {
+                        call.resolve(["aggregatedData": result])
+                    }
+                }
+            }
+        } else if dataTypeString == "sleep" {
+            self.querySleepAggregated(startDate: startDate, endDate: endDate) { result, error in
                 DispatchQueue.main.async {
                     if let error = error {
                         call.reject(error.localizedDescription)
@@ -474,12 +654,19 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                         let unit: HKUnit = {
                             switch dataTypeString {
                             case "steps": return .count()
-                            case "active-calories", "total-calories": return .kilocalorie()
-                            case "distance": return .meter()
+                            case "active-calories", "total-calories", "basal-calories": return .kilocalorie()
+                            case "distance", "distance-cycling": return .meter()
                             case "weight": return .gramUnit(with: .kilo)
                             case "height": return .meter()
-                            case "heart-rate": return HKUnit.count().unitDivided(by: HKUnit.minute())
+                            case "heart-rate", "resting-heart-rate": return HKUnit.count().unitDivided(by: HKUnit.minute())
+                            case "respiratory-rate": return HKUnit.count().unitDivided(by: HKUnit.minute())
                             case "hrv": return HKUnit.secondUnit(with: .milli)
+                            case "oxygen-saturation": return HKUnit.percent()
+                            case "blood-glucose": return HKUnit(from: "mg/dL")
+                            case "body-temperature", "basal-body-temperature": return HKUnit.degreeCelsius()
+                            case "body-fat": return HKUnit.percent()
+                            case "flights-climbed": return .count()
+                            case "exercise-time": return HKUnit.minute()
                             case "mindfulness": return HKUnit.second()
                             default: return .count()
                             }
@@ -511,6 +698,46 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             let calendar = Calendar.current
             if let categorySamples = samples as? [HKCategorySample], error == nil {
                 for sample in categorySamples {
+                    let startOfDay = calendar.startOfDay(for: sample.startDate)
+                    let duration = sample.endDate.timeIntervalSince(sample.startDate)
+                    dailyDurations[startOfDay, default: 0] += duration
+                }
+                var aggregatedSamples: [[String: Any]] = []
+                let dayComponent = DateComponents(day: 1)
+                for (date, duration) in dailyDurations {
+                    aggregatedSamples.append([
+                        "startDate": date,
+                        "endDate": calendar.date(byAdding: dayComponent, to: date) as Any,
+                        "value": duration
+                    ])
+                }
+                DispatchQueue.main.async {
+                    completion(aggregatedSamples, nil)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    completion(nil, error)
+                }
+            }
+        }
+        healthStore.execute(query)
+    }
+    
+    func querySleepAggregated(startDate: Date, endDate: Date, completion: @escaping ([[String: Any]]?, Error?) -> Void) {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+            DispatchQueue.main.async {
+                completion(nil, NSError(domain: "HealthKit", code: -1, userInfo: [NSLocalizedDescriptionKey: "SleepAnalysis type unavailable"]))
+            }
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+            var dailyDurations: [Date: TimeInterval] = [:]
+            let calendar = Calendar.current
+            if let categorySamples = samples as? [HKCategorySample], error == nil {
+                for sample in categorySamples {
+                    // Ignore in-bed samples; we care about actual sleep
+                    if sample.value == HKCategoryValueSleepAnalysis.inBed.rawValue { continue }
                     let startOfDay = calendar.startOfDay(for: sample.startDate)
                     let duration = sample.endDate.timeIntervalSince(sample.startDate)
                     dailyDurations[startOfDay, default: 0] += duration

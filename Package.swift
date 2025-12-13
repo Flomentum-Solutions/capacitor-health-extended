@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "CapacitorHealthExtended",
+    name: "FlomentumSolutionsCapacitorHealthExtended",
     platforms: [
         .iOS(.v15)
     ],
     products: [
         .library(
-            name: "CapacitorHealthExtended",
+            name: "FlomentumSolutionsCapacitorHealthExtended",
             targets: ["HealthPluginPlugin"]
         )
     ],
