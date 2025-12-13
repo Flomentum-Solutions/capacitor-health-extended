@@ -15,6 +15,6 @@ Pod::Spec.new do |s|
   s.ios.deployment_target = '15.0'
   s.dependency 'Capacitor',        '~> 8.0'
   s.dependency 'CapacitorCordova', '~> 8.0'
-  # Match the Swift shipped with Xcode 26
-  s.swift_version = '6.2'
+  # Match the Swift shipped with Xcode 15/16 (Capacitor 8)
+  s.swift_version = '5.9'
 end

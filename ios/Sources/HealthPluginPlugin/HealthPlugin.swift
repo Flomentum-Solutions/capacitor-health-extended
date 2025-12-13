@@ -441,7 +441,10 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 switch dataType.aggregationStyle {
                 case .cumulative:
                     return .cumulativeSum
-                case .discrete:
+                case .discrete,
+                     .discreteArithmetic,
+                     .discreteTemporallyWeighted,
+                     .discreteEquivalentContinuousLevel:
                     return .discreteAverage
                 @unknown default:
                     return .discreteAverage
@@ -627,48 +630,54 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                     "distance": workout.totalDistance?.doubleValue(for: .meter()) ?? 0
                 ]
                 let innerGroup = DispatchGroup()
+                let heartRateQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.heartRates")
+                let routeQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.routes")
                 var localHeartRates: [[String: Any]] = []
                 var localRoutes: [[String: Any]] = []
                 
                 if includeHeartRate {
                     innerGroup.enter()
                     self.queryHeartRate(for: workout) { rates, error in
-                        localHeartRates = rates
-                        if let error = error { 
-                            resultsQueue.async {
-                                errors["heart-rate"] = error 
+                        heartRateQueue.async {
+                            localHeartRates = rates
+                            if let error = error {
+                                errors["heart-rate"] = error
                             }
+                            innerGroup.leave()
                         }
-                        innerGroup.leave()
                     }
                 }
                 if includeRoute {
                     innerGroup.enter()
                     self.queryRoute(for: workout) { routes, error in
-                        localRoutes = routes
-                        if let error = error { 
-                            resultsQueue.async {
-                                errors["route"] = error 
+                        routeQueue.async {
+                            localRoutes = routes
+                            if let error = error {
+                                errors["route"] = error
                             }
+                            innerGroup.leave()
                         }
-                        innerGroup.leave()
                     }
                 }
                 if includeSteps {
                     innerGroup.enter()
                     self.queryAggregated(for: workout.startDate, for: workout.endDate, for: HKObjectType.quantityType(forIdentifier: .stepCount)) { steps in
-                        if let steps = steps {
-                            localDict["steps"] = steps
+                        resultsQueue.async {
+                            if let steps = steps {
+                                localDict["steps"] = steps
+                            }
+                            innerGroup.leave()
                         }
-                        innerGroup.leave()
                     }
                 }
-                innerGroup.notify(queue: .main) {
-                    localDict["heartRate"] = localHeartRates
-                    localDict["route"] = localRoutes
-                    resultsQueue.async {
-                        workoutResults.append(localDict)
+                innerGroup.notify(queue: resultsQueue) {
+                    heartRateQueue.sync {
+                        localDict["heartRate"] = localHeartRates
                     }
+                    routeQueue.sync {
+                        localDict["route"] = localRoutes
+                    }
+                    workoutResults.append(localDict)
                     outerGroup.leave()
                 }
             }
