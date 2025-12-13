@@ -1,21 +1,25 @@
-# capacitor-health-extended
+# @flomentumsolutions/capacitor-health-extended
 
 Cross‑platform Capacitor plugin for reading data from Apple HealthKit and
-Google Health Connect. The plugin requires **Node.js 20+** and is compatible
-with **Capacitor 7**.
+Google Health Connect. The plugin requires **Node.js 22+** and is compatible
+with **Capacitor 8**. For iOS the plugin ships a **Swift Package Manager**
+distribution (Capacitor 8 default), while the CocoaPods spec
+`FlomentumSolutionsCapacitorHealthExtended` remains for legacy projects.
 
 ## Thanks and attribution
 
-Forked from [capacitor-health](https://github.,com/mley/capacitor-health) and as such...
+Forked from [capacitor-health](https://github.com/mley/capacitor-health) and as such...
 - Some parts, concepts and ideas are borrowed from [cordova-plugin-health](https://github.com/dariosalvi78/cordova-plugin-health/).
 - Big thanks to [@dariosalvi78](https://github.com/dariosalvi78) for the support.
 
 Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fork is to extend functionality and datapoints and keep up with the ever-changing brand-new Android Health Connect Platform. I'm hoping to create platform parity for capacitor API-based health data access.
 
-## Requirements
+## Requirements (Plugin & Consuming Apps)
 
-- Node.js 20 or newer
-- Capacitor 7
+- Node.js 22+ (Latest LTS version is recommended)
+- Capacitor 8
+- iOS 15+ (Xcode 26 + HealthKit + SwiftPM toolchain)
+- Android 14+ (Android Studio Otter 2025.2.1 + Health Connect 1.2.0-alpha02 + Gradle 8.13.0 + Kotlin 2.2.20)
 
 ## Features
 
@@ -23,18 +27,30 @@ Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fo
 - Request and verify health permissions
 - Query aggregated data like steps or calories
 - Retrieve workout sessions with optional route and heart rate data
-- Fetch the latest sample for steps, heart‑rate, or weight
+- Fetch the latest samples for steps, distance (incl. cycling), calories (active/total/basal), heart‑rate, resting HR, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature (basal + core), body fat, height, weight, flights climbed, sleep, and exercise time.
+
+### Supported data types (parity iOS + Android)
+- Activity: steps, distance, distance‑cycling, exercise time (Apple Exercise Time), workouts (with routes/steps/calories), flights climbed
+- Energy: active calories, total calories, basal calories
+- Vitals: heart rate, resting heart rate, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature, basal body temperature
+- Body: weight, height, body fat
+- Sessions: mindfulness, sleep
 
 ## Install
 
 ```bash
-npm install capacitor-health-extended
+npm install @flomentumsolutions/capacitor-health-extended
 npx cap sync
 ```
 
-## Setup
+## Setup Consuming Apps
 
 ### iOS
+
+Capacitor 8 resolves iOS plugins via SwiftPM. Running `npx cap sync ios` will
+add the `FlomentumSolutionsCapacitorHealthExtended` package (backed by
+`capacitor-swift-pm`) to your Xcode project. If you are pinned to Capacitor 7,
+you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended`.
 
 * Make sure your app id has the 'HealthKit' entitlement when this plugin is installed (see iOS dev center).
 * Also, make sure your app and App Store description comply with the Apple review guidelines.
@@ -61,6 +77,17 @@ npx cap sync
     <uses-permission android:name="android.permission.health.READ_HEIGHT" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
     <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+    <uses-permission android:name="android.permission.health.READ_MINDFULNESS" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
+    <uses-permission android:name="android.permission.health.READ_BASAL_BODY_TEMPERATURE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
+    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
 ```
 
 

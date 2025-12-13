@@ -1,4 +1,4 @@
-package com.flomentum.health.capacitor
+package com.flomentumsolutions.health.capacitor
 
 import android.content.Intent
 import android.util.Log
@@ -14,6 +14,8 @@ import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.records.InstantaneousRecord
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -30,10 +32,32 @@ import java.time.Period
 import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicReference
 import androidx.core.net.toUri
+import kotlin.reflect.KClass
 
 enum class CapHealthPermission {
-    READ_STEPS, READ_WORKOUTS, READ_HEART_RATE, READ_ACTIVE_CALORIES, READ_TOTAL_CALORIES, READ_DISTANCE, READ_WEIGHT
-    , READ_HRV, READ_BLOOD_PRESSURE, READ_HEIGHT, READ_ROUTE, READ_MINDFULNESS;
+    READ_STEPS,
+    READ_WORKOUTS,
+    READ_EXERCISE_TIME,
+    READ_HEART_RATE,
+    READ_RESTING_HEART_RATE,
+    READ_ACTIVE_CALORIES,
+    READ_TOTAL_CALORIES,
+    READ_DISTANCE,
+    READ_WEIGHT,
+    READ_HRV,
+    READ_BLOOD_PRESSURE,
+    READ_HEIGHT,
+    READ_ROUTE,
+    READ_MINDFULNESS,
+    READ_RESPIRATORY_RATE,
+    READ_OXYGEN_SATURATION,
+    READ_BLOOD_GLUCOSE,
+    READ_BODY_TEMPERATURE,
+    READ_BASAL_BODY_TEMPERATURE,
+    READ_BODY_FAT,
+    READ_FLOORS_CLIMBED,
+    READ_BASAL_CALORIES,
+    READ_SLEEP;
 
     companion object {
         fun from(s: String): CapHealthPermission? {
@@ -53,14 +77,25 @@ enum class CapHealthPermission {
         Permission(alias = "READ_WEIGHT", strings = ["android.permission.health.READ_WEIGHT"]),
         Permission(alias = "READ_HEIGHT", strings = ["android.permission.health.READ_HEIGHT"]),
         Permission(alias = "READ_WORKOUTS", strings = ["android.permission.health.READ_EXERCISE"]),
+        Permission(alias = "READ_EXERCISE_TIME", strings = ["android.permission.health.READ_EXERCISE"]),
         Permission(alias = "READ_DISTANCE", strings = ["android.permission.health.READ_DISTANCE"]),
         Permission(alias = "READ_ACTIVE_CALORIES", strings = ["android.permission.health.READ_ACTIVE_CALORIES_BURNED"]),
         Permission(alias = "READ_TOTAL_CALORIES", strings = ["android.permission.health.READ_TOTAL_CALORIES_BURNED"]),
         Permission(alias = "READ_HEART_RATE", strings = ["android.permission.health.READ_HEART_RATE"]),
+        Permission(alias = "READ_RESTING_HEART_RATE", strings = ["android.permission.health.READ_RESTING_HEART_RATE"]),
         Permission(alias = "READ_HRV", strings = ["android.permission.health.READ_HEART_RATE_VARIABILITY"]),
         Permission(alias = "READ_BLOOD_PRESSURE", strings = ["android.permission.health.READ_BLOOD_PRESSURE"]),
         Permission(alias = "READ_ROUTE", strings = ["android.permission.health.READ_EXERCISE"]),
-        Permission(alias = "READ_MINDFULNESS", strings = ["android.permission.health.READ_SLEEP"])
+        Permission(alias = "READ_MINDFULNESS", strings = ["android.permission.health.READ_MINDFULNESS"]),
+        Permission(alias = "READ_RESPIRATORY_RATE", strings = ["android.permission.health.READ_RESPIRATORY_RATE"]),
+        Permission(alias = "READ_OXYGEN_SATURATION", strings = ["android.permission.health.READ_OXYGEN_SATURATION"]),
+        Permission(alias = "READ_BLOOD_GLUCOSE", strings = ["android.permission.health.READ_BLOOD_GLUCOSE"]),
+        Permission(alias = "READ_BODY_TEMPERATURE", strings = ["android.permission.health.READ_BODY_TEMPERATURE"]),
+        Permission(alias = "READ_BASAL_BODY_TEMPERATURE", strings = ["android.permission.health.READ_BASAL_BODY_TEMPERATURE"]),
+        Permission(alias = "READ_BODY_FAT", strings = ["android.permission.health.READ_BODY_FAT"]),
+        Permission(alias = "READ_FLOORS_CLIMBED", strings = ["android.permission.health.READ_FLOORS_CLIMBED"]),
+        Permission(alias = "READ_BASAL_CALORIES", strings = ["android.permission.health.READ_BASAL_METABOLIC_RATE"]),
+        Permission(alias = "READ_SLEEP", strings = ["android.permission.health.READ_SLEEP"])
     ]
 )
 
@@ -83,10 +118,21 @@ class HealthPlugin : Plugin() {
         CapHealthPermission.READ_TOTAL_CALORIES to HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
         CapHealthPermission.READ_DISTANCE to HealthPermission.getReadPermission(DistanceRecord::class),
         CapHealthPermission.READ_WORKOUTS to HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        CapHealthPermission.READ_EXERCISE_TIME to HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         CapHealthPermission.READ_HRV to HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
         CapHealthPermission.READ_BLOOD_PRESSURE to HealthPermission.getReadPermission(BloodPressureRecord::class),
         CapHealthPermission.READ_ROUTE to HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-        CapHealthPermission.READ_MINDFULNESS to HealthPermission.getReadPermission(SleepSessionRecord::class)
+        CapHealthPermission.READ_MINDFULNESS to HealthPermission.getReadPermission(MindfulnessSessionRecord::class),
+        CapHealthPermission.READ_RESTING_HEART_RATE to HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+        CapHealthPermission.READ_RESPIRATORY_RATE to HealthPermission.getReadPermission(RespiratoryRateRecord::class),
+        CapHealthPermission.READ_OXYGEN_SATURATION to HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+        CapHealthPermission.READ_BLOOD_GLUCOSE to HealthPermission.getReadPermission(BloodGlucoseRecord::class),
+        CapHealthPermission.READ_BODY_TEMPERATURE to HealthPermission.getReadPermission(BodyTemperatureRecord::class),
+        CapHealthPermission.READ_BASAL_BODY_TEMPERATURE to HealthPermission.getReadPermission(BasalBodyTemperatureRecord::class),
+        CapHealthPermission.READ_BODY_FAT to HealthPermission.getReadPermission(BodyFatRecord::class),
+        CapHealthPermission.READ_FLOORS_CLIMBED to HealthPermission.getReadPermission(FloorsClimbedRecord::class),
+        CapHealthPermission.READ_BASAL_CALORIES to HealthPermission.getReadPermission(BasalMetabolicRateRecord::class),
+        CapHealthPermission.READ_SLEEP to HealthPermission.getReadPermission(SleepSessionRecord::class)
     )
 
     override fun load() {
@@ -281,6 +327,27 @@ class HealthPlugin : Plugin() {
                 TotalCaloriesBurnedRecord.ENERGY_TOTAL
             ) { it?.inKilocalories }
             "distance" -> metricAndMapper("distance", CapHealthPermission.READ_DISTANCE, DistanceRecord.DISTANCE_TOTAL) { it?.inMeters }
+            "distance-cycling" -> metricAndMapper("distance", CapHealthPermission.READ_DISTANCE, DistanceRecord.DISTANCE_TOTAL) { it?.inMeters }
+            "flights-climbed" -> metricAndMapper(
+                "flightsClimbed",
+                CapHealthPermission.READ_FLOORS_CLIMBED,
+                FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL
+            ) { it?.toDouble() }
+            "mindfulness" -> metricAndMapper(
+                "mindfulness",
+                CapHealthPermission.READ_MINDFULNESS,
+                MindfulnessSessionRecord.MINDFULNESS_DURATION_TOTAL
+            ) { it?.seconds?.toDouble() }
+            "basal-calories" -> metricAndMapper(
+                "basalCalories",
+                CapHealthPermission.READ_BASAL_CALORIES,
+                BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL
+            ) { (it as Energy?)?.kilocalories }
+            "resting-heart-rate" -> metricAndMapper(
+                "restingHeartRate",
+                CapHealthPermission.READ_RESTING_HEART_RATE,
+                RestingHeartRateRecord.BPM_AVG
+            ) { (it as Long?)?.toDouble() }
             else -> throw RuntimeException("Unsupported dataType: $dataType")
         }
     }
@@ -302,14 +369,27 @@ class HealthPlugin : Plugin() {
             try {
                 val result = when (dataType) {
                     "heart-rate", "heartRate" -> readLatestHeartRate()
+                    "resting-heart-rate" -> readLatestRestingHeartRate()
                     "weight" -> readLatestWeight()
                     "height" -> readLatestHeight()
                     "steps" -> readLatestSteps()
                     "hrv" -> readLatestHrv()
                     "blood-pressure" -> readLatestBloodPressure()
                     "distance" -> readLatestDistance()
+                    "distance-cycling" -> readLatestDistance()
                     "active-calories" -> readLatestActiveCalories()
                     "total-calories" -> readLatestTotalCalories()
+                    "basal-calories" -> readLatestBasalCalories()
+                    "respiratory-rate" -> readLatestRespiratoryRate()
+                    "oxygen-saturation" -> readLatestOxygenSaturation()
+                    "blood-glucose" -> readLatestBloodGlucose()
+                    "body-temperature" -> readLatestBodyTemperature()
+                    "basal-body-temperature" -> readLatestBasalBodyTemperature()
+                    "body-fat" -> readLatestBodyFat()
+                    "flights-climbed" -> readLatestFlightsClimbed()
+                    "exercise-time" -> readLatestExerciseTime()
+                    "mindfulness" -> readLatestMindfulness()
+                    "sleep" -> readLatestSleep()
                     else -> throw IllegalArgumentException("Unsupported data type: $dataType")
                 }
                 call.resolve(result)
@@ -485,6 +565,239 @@ class HealthPlugin : Plugin() {
         }
     }
 
+    private suspend fun readLatestRestingHeartRate(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_RESTING_HEART_RATE)) {
+            throw Exception("Permission for resting heart rate not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = RestingHeartRateRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.beatsPerMinute ?: 0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "count/min")
+        }
+    }
+
+    private suspend fun readLatestRespiratoryRate(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_RESPIRATORY_RATE)) {
+            throw Exception("Permission for respiratory rate not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = RespiratoryRateRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.rate ?: 0.0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "count/min")
+        }
+    }
+
+    private suspend fun readLatestOxygenSaturation(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_OXYGEN_SATURATION)) {
+            throw Exception("Permission for oxygen saturation not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = OxygenSaturationRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.percentage?.value ?: 0.0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "percent")
+        }
+    }
+
+    private suspend fun readLatestBloodGlucose(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_BLOOD_GLUCOSE)) {
+            throw Exception("Permission for blood glucose not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = BloodGlucoseRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        val meta = JSObject()
+        record?.let {
+            meta.put("specimenSource", it.specimenSource)
+            meta.put("relationToMeal", it.relationToMeal)
+            meta.put("mealType", it.mealType)
+        }
+        return JSObject().apply {
+            put("value", record?.level?.milligramsPerDeciliter ?: 0.0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "mg/dL")
+            put("metadata", meta)
+        }
+    }
+
+    private suspend fun readLatestBodyTemperature(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_BODY_TEMPERATURE)) {
+            throw Exception("Permission for body temperature not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = BodyTemperatureRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.temperature?.celsius ?: 0.0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "degC")
+        }
+    }
+
+    private suspend fun readLatestBasalBodyTemperature(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_BASAL_BODY_TEMPERATURE)) {
+            throw Exception("Permission for basal body temperature not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = BasalBodyTemperatureRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.temperature?.celsius ?: 0.0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "degC")
+        }
+    }
+
+    private suspend fun readLatestBodyFat(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_BODY_FAT)) {
+            throw Exception("Permission for body fat not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = BodyFatRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.percentage?.value ?: 0.0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "percent")
+        }
+    }
+
+    private suspend fun readLatestBasalCalories(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_BASAL_CALORIES)) {
+            throw Exception("Permission for basal calories not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = BasalMetabolicRateRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.basalMetabolicRate?.kilocaloriesPerDay ?: 0.0)
+            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("unit", "kcal/day")
+        }
+    }
+
+    private suspend fun readLatestFlightsClimbed(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_FLOORS_CLIMBED)) {
+            throw Exception("Permission for floors climbed not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = FloorsClimbedRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        return JSObject().apply {
+            put("value", record?.floors ?: 0.0)
+            put("timestamp", (record?.endTime?.epochSecond ?: 0) * 1000)
+            put("unit", "count")
+        }
+    }
+
+    private suspend fun readLatestExerciseTime(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_WORKOUTS)) {
+            throw Exception("Permission for exercise sessions not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = ExerciseSessionRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        val duration = record?.let { session ->
+            if (session.segments.isEmpty()) {
+                session.endTime.epochSecond - session.startTime.epochSecond
+            } else {
+                session.segments.sumOf { it.endTime.epochSecond - it.startTime.epochSecond }
+            }
+        } ?: 0
+        return JSObject().apply {
+            put("value", duration / 60.0)
+            put("timestamp", (record?.startTime?.epochSecond ?: 0) * 1000)
+            put("endTimestamp", (record?.endTime?.epochSecond ?: 0) * 1000)
+            put("unit", "min")
+        }
+    }
+
+    private suspend fun readLatestMindfulness(): JSObject {
+        if (!hasPermission(CapHealthPermission.READ_MINDFULNESS)) {
+            throw Exception("Permission for mindfulness not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = MindfulnessSessionRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        val durationSeconds = record?.let { it.endTime.epochSecond - it.startTime.epochSecond } ?: 0
+        val metadata = JSObject()
+        record?.notes?.let { metadata.put("notes", it) }
+        record?.title?.let { metadata.put("title", it) }
+        record?.mindfulnessSessionType?.let { metadata.put("type", it) }
+        return JSObject().apply {
+            put("value", durationSeconds / 60.0)
+            put("timestamp", (record?.startTime?.epochSecond ?: 0) * 1000)
+            put("endTimestamp", (record?.endTime?.epochSecond ?: 0) * 1000)
+            put("unit", "min")
+            put("metadata", metadata)
+        }
+    }
+
+    private suspend fun readLatestSleep(): JSObject {
+        val hasSleepPermission = hasPermission(CapHealthPermission.READ_SLEEP)
+        if (!hasSleepPermission) {
+            throw Exception("Permission for sleep not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = SleepSessionRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+        val durationMinutes = record?.let { (it.endTime.epochSecond - it.startTime.epochSecond) / 60.0 } ?: 0.0
+        val metadata = JSObject()
+        record?.title?.let { metadata.put("title", it) }
+        metadata.put("stagesCount", record?.stages?.size ?: 0)
+        return JSObject().apply {
+            put("value", durationMinutes)
+            put("timestamp", (record?.startTime?.epochSecond ?: 0) * 1000)
+            put("endTimestamp", (record?.endTime?.epochSecond ?: 0) * 1000)
+            put("unit", "min")
+            put("metadata", metadata)
+        }
+    }
+
     private suspend fun readLatestTotalCalories(): JSObject {
         if (!hasPermission(CapHealthPermission.READ_TOTAL_CALORIES)) {
             throw Exception("Permission for total calories not granted")
@@ -544,6 +857,133 @@ class HealthPlugin : Plugin() {
                     }
                 }
                 return  // skip the normal aggregate path
+            }
+
+            if (dataType == "exercise-time") {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val exerciseDurations = aggregateExerciseTime(
+                            TimeRangeFilter.between(startDateTime, endDateTime),
+                            period
+                        )
+                        val aggregatedList = JSArray()
+                        exerciseDurations.forEach { aggregatedList.put(it.toJs()) }
+                        val finalResult = JSObject()
+                        finalResult.put("aggregatedData", aggregatedList)
+                        call.resolve(finalResult)
+                    } catch (e: Exception) {
+                        call.reject("Error querying aggregated exercise time: ${e.message}")
+                    }
+                }
+                return
+            }
+
+            if (dataType == "sleep") {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val sleepDurations = aggregateSleepSessions(
+                            TimeRangeFilter.between(startDateTime, endDateTime),
+                            period
+                        )
+                        val aggregatedList = JSArray()
+                        sleepDurations.forEach { aggregatedList.put(it.toJs()) }
+                        val finalResult = JSObject()
+                        finalResult.put("aggregatedData", aggregatedList)
+                        call.resolve(finalResult)
+                    } catch (e: Exception) {
+                        call.reject("Error querying aggregated sleep data: ${e.message}")
+                    }
+                }
+                return
+            }
+
+            if (dataType == "mindfulness") {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val metricAndMapper = getMetricAndMapper(dataType)
+                        val r = queryAggregatedMetric(
+                            metricAndMapper,
+                            TimeRangeFilter.between(startDateTime, endDateTime),
+                            period
+                        )
+                        val aggregatedList = JSArray()
+                        r.forEach { aggregatedList.put(it.toJs()) }
+                        val finalResult = JSObject()
+                        finalResult.put("aggregatedData", aggregatedList)
+                        call.resolve(finalResult)
+                    } catch (e: Exception) {
+                        call.reject("Error querying aggregated mindfulness data: ${e.message}")
+                    }
+                }
+                return
+            }
+
+            if (setOf(
+                    "respiratory-rate",
+                    "oxygen-saturation",
+                    "blood-glucose",
+                    "body-temperature",
+                    "basal-body-temperature",
+                    "body-fat"
+                ).contains(dataType)
+            ) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val aggregated = when (dataType) {
+                            "respiratory-rate" -> aggregateInstantAverage(
+                                RespiratoryRateRecord::class,
+                                CapHealthPermission.READ_RESPIRATORY_RATE,
+                                TimeRangeFilter.between(startDateTime, endDateTime),
+                                period
+                            ) { it.rate }
+
+                            "oxygen-saturation" -> aggregateInstantAverage(
+                                OxygenSaturationRecord::class,
+                                CapHealthPermission.READ_OXYGEN_SATURATION,
+                                TimeRangeFilter.between(startDateTime, endDateTime),
+                                period
+                            ) { it.percentage.value }
+
+                            "blood-glucose" -> aggregateInstantAverage(
+                                BloodGlucoseRecord::class,
+                                CapHealthPermission.READ_BLOOD_GLUCOSE,
+                                TimeRangeFilter.between(startDateTime, endDateTime),
+                                period
+                            ) { it.level.milligramsPerDeciliter }
+
+                            "body-temperature" -> aggregateInstantAverage(
+                                BodyTemperatureRecord::class,
+                                CapHealthPermission.READ_BODY_TEMPERATURE,
+                                TimeRangeFilter.between(startDateTime, endDateTime),
+                                period
+                            ) { it.temperature.celsius }
+
+                            "basal-body-temperature" -> aggregateInstantAverage(
+                                BasalBodyTemperatureRecord::class,
+                                CapHealthPermission.READ_BASAL_BODY_TEMPERATURE,
+                                TimeRangeFilter.between(startDateTime, endDateTime),
+                                period
+                            ) { it.temperature.celsius }
+
+                            "body-fat" -> aggregateInstantAverage(
+                                BodyFatRecord::class,
+                                CapHealthPermission.READ_BODY_FAT,
+                                TimeRangeFilter.between(startDateTime, endDateTime),
+                                period
+                            ) { it.percentage.value }
+
+                            else -> emptyList()
+                        }
+                        val aggregatedList = JSArray()
+                        aggregated.forEach { aggregatedList.put(it.toJs()) }
+                        val finalResult = JSObject()
+                        finalResult.put("aggregatedData", aggregatedList)
+                        call.resolve(finalResult)
+                    } catch (e: Exception) {
+                        call.reject("Error querying aggregated data: ${e.message}")
+                    }
+                }
+                return
             }
 
             CoroutineScope(Dispatchers.IO).launch {
@@ -654,6 +1094,108 @@ class HealthPlugin : Plugin() {
                     localDate.atStartOfDay(),
                     localDate.plusDays(1).atStartOfDay(),
                     if (avg.isNaN()) null else avg
+                )
+            }
+            .sortedBy { it.startDate }
+    }
+
+    private suspend fun <T : InstantaneousRecord> aggregateInstantAverage(
+        recordType: KClass<T>,
+        permission: CapHealthPermission,
+        timeRange: TimeRangeFilter,
+        period: Period,
+        valueSelector: (T) -> Double?
+    ): List<AggregatedSample> {
+        if (!hasPermission(permission)) {
+            return emptyList()
+        }
+        if (period != Period.ofDays(1)) {
+            throw RuntimeException("Unsupported bucket for aggregation")
+        }
+
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = recordType,
+                timeRangeFilter = timeRange
+            )
+        )
+
+        return response.records
+            .groupBy { it.time.atZone(ZoneId.systemDefault()).toLocalDate() }
+            .map { (localDate, recs) ->
+                val avg = recs.mapNotNull(valueSelector).average()
+                AggregatedSample(
+                    localDate.atStartOfDay(),
+                    localDate.plusDays(1).atStartOfDay(),
+                    if (avg.isNaN()) null else avg
+                )
+            }
+            .sortedBy { it.startDate }
+    }
+
+    private suspend fun aggregateExerciseTime(
+        timeRange: TimeRangeFilter,
+        period: Period
+    ): List<AggregatedSample> {
+        if (!hasPermission(CapHealthPermission.READ_WORKOUTS)) {
+            return emptyList()
+        }
+        if (period != Period.ofDays(1)) {
+            throw RuntimeException("Unsupported bucket: $period")
+        }
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                timeRangeFilter = timeRange,
+                dataOriginsFilter = emptySet(),
+                ascendingOrder = true,
+                pageSize = 1000
+            )
+        )
+        return response.records
+            .groupBy { it.startTime.atZone(ZoneId.systemDefault()).toLocalDate() }
+            .map { (localDate, sessions) ->
+                val totalSeconds = sessions.sumOf { session ->
+                    if (session.segments.isEmpty()) {
+                        session.endTime.epochSecond - session.startTime.epochSecond
+                    } else {
+                        session.segments.sumOf { it.endTime.epochSecond - it.startTime.epochSecond }
+                    }
+                }
+                AggregatedSample(
+                    localDate.atStartOfDay(),
+                    localDate.plusDays(1).atStartOfDay(),
+                    totalSeconds / 60.0
+                )
+            }
+            .sortedBy { it.startDate }
+    }
+
+    private suspend fun aggregateSleepSessions(
+        timeRange: TimeRangeFilter,
+        period: Period
+    ): List<AggregatedSample> {
+        val hasSleepPermission = hasPermission(CapHealthPermission.READ_SLEEP)
+        if (!hasSleepPermission) {
+            return emptyList()
+        }
+        if (period != Period.ofDays(1)) {
+            throw RuntimeException("Unsupported bucket: $period")
+        }
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = SleepSessionRecord::class,
+                timeRangeFilter = timeRange
+            )
+        )
+        return response.records
+            .groupBy { it.startTime.atZone(ZoneId.systemDefault()).toLocalDate() }
+            .map { (localDate, sessions) ->
+                val totalSeconds = sessions.sumOf { it.endTime.epochSecond - it.startTime.epochSecond }
+                AggregatedSample(
+                    localDate.atStartOfDay(),
+                    localDate.plusDays(1).atStartOfDay(),
+                    totalSeconds.toDouble()
                 )
             }
             .sortedBy { it.startDate }

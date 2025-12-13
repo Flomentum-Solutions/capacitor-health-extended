@@ -60,7 +60,7 @@ export interface HealthPlugin {
    * Query latest sample for a specific data type
    * @param request
    */
-  queryLatestSample(request: { dataType: string }): Promise<QueryLatestSampleResponse>;
+  queryLatestSample(request: { dataType: LatestDataType }): Promise<QueryLatestSampleResponse>;
 
   /**
    * Query latest weight sample
@@ -92,10 +92,45 @@ export declare type HealthPermission =
   | 'READ_WEIGHT'
   | 'READ_HEIGHT'
   | 'READ_HEART_RATE'
+  | 'READ_RESTING_HEART_RATE'
   | 'READ_ROUTE'
   | 'READ_MINDFULNESS'
   | 'READ_HRV'
-  | 'READ_BLOOD_PRESSURE';
+  | 'READ_BLOOD_PRESSURE'
+  | 'READ_BASAL_CALORIES'
+  | 'READ_RESPIRATORY_RATE'
+  | 'READ_OXYGEN_SATURATION'
+  | 'READ_BLOOD_GLUCOSE'
+  | 'READ_BODY_TEMPERATURE'
+  | 'READ_BASAL_BODY_TEMPERATURE'
+  | 'READ_BODY_FAT'
+  | 'READ_FLOORS_CLIMBED'
+  | 'READ_SLEEP'
+  | 'READ_EXERCISE_TIME';
+
+export type LatestDataType =
+  | 'steps'
+  | 'active-calories'
+  | 'total-calories'
+  | 'basal-calories'
+  | 'distance'
+  | 'weight'
+  | 'height'
+  | 'heart-rate'
+  | 'resting-heart-rate'
+  | 'respiratory-rate'
+  | 'oxygen-saturation'
+  | 'blood-glucose'
+  | 'body-temperature'
+  | 'basal-body-temperature'
+  | 'body-fat'
+  | 'flights-climbed'
+  | 'exercise-time'
+  | 'distance-cycling'
+  | 'mindfulness'
+  | 'sleep'
+  | 'hrv'
+  | 'blood-pressure';
 
 export interface PermissionsRequest {
   permissions: HealthPermission[];
@@ -147,7 +182,29 @@ export interface Workout {
 export interface QueryAggregatedRequest {
   startDate: string;
   endDate: string;
-  dataType: 'steps' | 'active-calories' | 'mindfulness' | 'hrv' | 'blood-pressure';
+  dataType:
+    | 'steps'
+    | 'active-calories'
+    | 'total-calories'
+    | 'basal-calories'
+    | 'distance'
+    | 'weight'
+    | 'height'
+    | 'heart-rate'
+    | 'resting-heart-rate'
+    | 'respiratory-rate'
+    | 'oxygen-saturation'
+    | 'blood-glucose'
+    | 'body-temperature'
+    | 'basal-body-temperature'
+    | 'body-fat'
+    | 'flights-climbed'
+    | 'exercise-time'
+    | 'distance-cycling'
+    | 'sleep'
+    | 'mindfulness'
+    | 'hrv'
+    | 'blood-pressure';
   bucket: string;
 }
 
@@ -166,5 +223,7 @@ export interface QueryLatestSampleResponse {
   systolic?: number;
   diastolic?: number;
   timestamp: number;
+  endTimestamp?: number;
   unit: string;
+  metadata?: Record<string, unknown>;
 }

@@ -1,74 +1,44 @@
-name: Publish npm package and Create GitHub Release
+name: Publish Package
 
 on:
-  workflow_dispatch:
-
-permissions:
-  contents: write  # Grant write permission to push the tag
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    
+    # -----------------------------------------------------------------
+    # CHANGE 1: PERMISSIONS
+    # You must add 'id-token: write' for Trusted Publishing to work
+    # -----------------------------------------------------------------
+    permissions:
+      contents: write  # For creating the GitHub Release
+      id-token: write  # CRITICAL: For npm OIDC authentication
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Ensures the entire Git history is available
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '22'
+          # We still define the registry, but we don't need the secret token anymore
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
+      - run: npm ci
+      - run: npm run build
 
-      - name: Build the project
-        run: npm run build  # adjust the build command if necessary
-
-      - name: Configure npm for authentication
-        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-
-      - name: Get package version
-        id: get_version
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          
-      - name: Get the last Git tag
-        id: last_tag
-        run: echo "LAST_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
-
-      - name: Get release notes from commits
-        id: release_notes
-        run: |
-          echo "Release Notes:" > release_notes.txt
-          git log ${{ env.LAST_TAG }}..HEAD --pretty=format:"- %s" >> release_notes.txt
-        shell: bash
-
-      - name: Show release notes
-        run: cat release_notes.txt
-
-      - name: Create Git tag
-        run: |
-          git tag v${{ env.VERSION }}
-          git push origin v${{ env.VERSION }}
-
-      - name: Create GitHub release
-        uses: actions/create-release@v1
+      # -----------------------------------------------------------------
+      # CHANGE 2: PUBLISH COMMAND
+      # Use '--provenance' to link the package to this repo securely.
+      # Note: We removed the 'env: NODE_AUTH_TOKEN' block entirely.
+      # -----------------------------------------------------------------
+      - run: npm publish --provenance
+        
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ env.VERSION }}
-          release_name: Release v${{ env.VERSION }}
-          body_path: ./release_notes.txt
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          generate_release_notes: true
+          files: |
+            dist/**
