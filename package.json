@@ -5,6 +5,10 @@
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "unpkg": "dist/plugin.js",
   "files": [
     "android/src/main/",
