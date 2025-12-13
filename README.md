@@ -6,7 +6,7 @@ with **Capacitor 7**.
 
 ## Thanks and attribution
 
-Forked from [capacitor-health](https://github.,com/mley/capacitor-health) and as such...
+Forked from [capacitor-health](https://github.com/mley/capacitor-health) and as such...
 - Some parts, concepts and ideas are borrowed from [cordova-plugin-health](https://github.com/dariosalvi78/cordova-plugin-health/).
 - Big thanks to [@dariosalvi78](https://github.com/dariosalvi78) for the support.
 

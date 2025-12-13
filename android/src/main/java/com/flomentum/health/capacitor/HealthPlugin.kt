@@ -1,4 +1,4 @@
-package com.flomentum.health.capacitor
+package com.flomentumsolutions.health.capacitor
 
 import android.content.Intent
 import android.util.Log

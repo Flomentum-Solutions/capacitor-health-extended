@@ -27,7 +27,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
     let healthStore = HKHealthStore()
     
     /// Serial queue to make route‑location mutations thread‑safe without locks
-    private let routeSyncQueue = DispatchQueue(label: "com.flomentum.healthplugin.routeSync")
+    private let routeSyncQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.routeSync")
     
     @objc func isHealthAvailable(_ call: CAPPluginCall) {
         let isAvailable = HKHealthStore.isHealthDataAvailable()
@@ -609,7 +609,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             let outerGroup = DispatchGroup()
-            let resultsQueue = DispatchQueue(label: "com.flomentum.healthplugin.workoutResults")
+            let resultsQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.workoutResults")
             var workoutResults: [[String: Any]] = []
             var errors: [String: String] = [:]
             
@@ -721,7 +721,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let self = self else { return }
             if let routes = samples as? [HKWorkoutRoute], error == nil {
                 let routeDispatchGroup = DispatchGroup()
-                let allLocationsQueue = DispatchQueue(label: "com.flomentum.healthplugin.allLocations")
+                let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.allLocations")
                 var allLocations: [[String: Any]] = []
                 
                 for route in routes {
