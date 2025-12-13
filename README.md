@@ -14,11 +14,12 @@ Forked from [capacitor-health](https://github.com/mley/capacitor-health) and as 
 
 Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fork is to extend functionality and datapoints and keep up with the ever-changing brand-new Android Health Connect Platform. I'm hoping to create platform parity for capacitor API-based health data access.
 
-## Requirements
+## Requirements (Plugin & Consuming Apps)
 
-- Node.js 20 or newer
+- Node.js 22+ (Latest LTS version is recommended)
 - Capacitor 8
-- iOS 15 or newer (HealthKit + SwiftPM toolchain)
+- iOS 15+ (Xcode 26 + HealthKit + SwiftPM toolchain)
+- Android 14+ (Android Studio Otter 2025.2.1 + Health Connect 1.2.0-alpha02 + Gradle 8.13.0 + Kotlin 2.2.20)
 
 ## Features
 
@@ -42,7 +43,7 @@ npm install @flomentumsolutions/capacitor-health-extended
 npx cap sync
 ```
 
-## Setup
+## Setup Consuming Apps
 
 ### iOS
 
