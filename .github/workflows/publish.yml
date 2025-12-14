@@ -24,8 +24,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          # We still define the registry, but we don't need the secret token anymore
-          registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
       - run: npm run build
