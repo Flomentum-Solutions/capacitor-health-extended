@@ -5,6 +5,16 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.4.4] – 2025-12-15  
+### Fixed
+- `total-calories` now correctly derives active + basal energy on both iOS and Android for latest samples, aggregated queries, and workouts; falls back to the platform total or active calories when basal data/permission is unavailable.
+- Latest sleep sample on iOS now returns the most recent complete sleep session (asleep states only) within the last 36 hours and ignores in-bed/awake noise to avoid inflated durations.
+
+### Security
+- None
+
+---
+
 ## [0.4.0] – 2025-12-13  
 ### Changed
 - Daily aggregated queries now align to local calendar days (start-of-day to end-of-day) instead of a trailing 24-hour window so “today” matches Health app totals.

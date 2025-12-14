@@ -804,7 +804,72 @@ class HealthPlugin : Plugin() {
         }
     }
 
+    private suspend fun sumActiveAndBasalCalories(
+        timeRange: TimeRangeFilter,
+        includeTotalMetricFallback: Boolean = false
+    ): Double? {
+        val metrics = mutableSetOf<AggregateMetric<*>>()
+        val includeActive = hasPermission(CapHealthPermission.READ_ACTIVE_CALORIES)
+        val includeBasal = hasPermission(CapHealthPermission.READ_BASAL_CALORIES)
+        val includeTotal = includeTotalMetricFallback && hasPermission(CapHealthPermission.READ_TOTAL_CALORIES)
+
+        if (includeActive) metrics.add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
+        if (includeBasal) metrics.add(BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL)
+        if (includeTotal) metrics.add(TotalCaloriesBurnedRecord.ENERGY_TOTAL)
+
+        if (metrics.isEmpty()) {
+            return null
+        }
+
+        val aggregation = healthConnectClient.aggregate(
+            AggregateRequest(
+                metrics = metrics,
+                timeRangeFilter = timeRange,
+                dataOriginFilter = emptySet()
+            )
+        )
+
+        val active = if (includeActive) {
+            aggregation[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories
+        } else null
+        val basal = if (includeBasal) {
+            aggregation[BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL]?.inKilocalories
+        } else null
+        val total = if (includeTotal) {
+            aggregation[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories
+        } else null
+
+        return when {
+            active != null || basal != null -> (active ?: 0.0) + (basal ?: 0.0)
+            includeTotal -> total
+            else -> null
+        }
+    }
+
     private suspend fun readLatestTotalCalories(): JSObject {
+        val zone = ZoneId.systemDefault()
+        val now = LocalDateTime.now(zone)
+
+        val derivedTotal = try {
+            sumActiveAndBasalCalories(
+                TimeRangeFilter.between(
+                    now.toLocalDate().atStartOfDay(),
+                    now
+                )
+            )
+        } catch (e: Exception) {
+            Log.w(tag, "readLatestTotalCalories: Failed to derive active+basal calories, falling back to total metric", e)
+            null
+        }
+
+        if (derivedTotal != null) {
+            return JSObject().apply {
+                put("value", derivedTotal)
+                put("timestamp", now.atZone(zone).toInstant().toEpochMilli())
+                put("unit", "kcal")
+            }
+        }
+
         if (!hasPermission(CapHealthPermission.READ_TOTAL_CALORIES)) {
             throw Exception("Permission for total calories not granted")
         }
@@ -952,13 +1017,17 @@ class HealthPlugin : Plugin() {
                         }
 
                         else -> {
-                            val metricAndMapper = getMetricAndMapper(dataType)
-                            val r = queryAggregatedMetric(
-                                metricAndMapper,
-                                timeRange,
-                                period
-                            )
-                            r.forEach { aggregatedList.put(it.toJs()) }
+                            val aggregated = if (dataType == "total-calories") {
+                                aggregateTotalCalories(timeRange, period)
+                            } else {
+                                val metricAndMapper = getMetricAndMapper(dataType)
+                                queryAggregatedMetric(
+                                    metricAndMapper,
+                                    timeRange,
+                                    period
+                                )
+                            }
+                            aggregated.forEach { aggregatedList.put(it.toJs()) }
                         }
                     }
 
@@ -1066,6 +1135,51 @@ class HealthPlugin : Plugin() {
             AggregatedSample(it.startTime, it.endTime, mappedValue)
         }
 
+    }
+
+    private suspend fun aggregateTotalCalories(
+        timeRange: TimeRangeFilter,
+        period: Period
+    ): List<AggregatedSample> {
+        val includeActive = hasPermission(CapHealthPermission.READ_ACTIVE_CALORIES)
+        val includeBasal = hasPermission(CapHealthPermission.READ_BASAL_CALORIES)
+        val includeTotal = hasPermission(CapHealthPermission.READ_TOTAL_CALORIES)
+
+        val metrics = mutableSetOf<AggregateMetric<*>>()
+        if (includeActive) metrics.add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
+        if (includeBasal) metrics.add(BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL)
+        if (includeTotal) metrics.add(TotalCaloriesBurnedRecord.ENERGY_TOTAL)
+
+        if (metrics.isEmpty()) {
+            return emptyList()
+        }
+
+        val response: List<AggregationResultGroupedByPeriod> = healthConnectClient.aggregateGroupByPeriod(
+            AggregateGroupByPeriodRequest(
+                metrics = metrics,
+                timeRangeFilter = timeRange,
+                timeRangeSlicer = period
+            )
+        )
+
+        return response.map {
+            val active = if (includeActive) {
+                it.result[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories
+            } else null
+            val basal = if (includeBasal) {
+                it.result[BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL]?.inKilocalories
+            } else null
+            val total = if (includeTotal) {
+                it.result[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories
+            } else null
+
+            val value = when {
+                active != null || basal != null -> (active ?: 0.0) + (basal ?: 0.0)
+                else -> total ?: 0.0
+            }
+
+            AggregatedSample(it.startTime, it.endTime, value)
+        }
     }
 
     private suspend fun aggregateHrvByPeriod(
@@ -1409,9 +1523,12 @@ class HealthPlugin : Plugin() {
                         addWorkoutMetric(workout, workoutObject, getMetricAndMapper("steps"))
                     }
 
-                    val readTotalCaloriesResult = addWorkoutMetric(workout, workoutObject, getMetricAndMapper("total-calories"))
-                    if(!readTotalCaloriesResult) {
-                        addWorkoutMetric(workout, workoutObject, getMetricAndMapper("active-calories"))
+                    val derivedTotalAdded = addWorkoutTotalCalories(workout, workoutObject)
+                    if (!derivedTotalAdded) {
+                        val readTotalCaloriesResult = addWorkoutMetric(workout, workoutObject, getMetricAndMapper("total-calories"))
+                        if(!readTotalCaloriesResult) {
+                            addWorkoutMetric(workout, workoutObject, getMetricAndMapper("active-calories"))
+                        }
                     }
 
                     addWorkoutMetric(workout, workoutObject, getMetricAndMapper("distance"))
@@ -1448,6 +1565,27 @@ class HealthPlugin : Plugin() {
             } catch (e: Exception) {
                 call.reject("Error querying workouts: ${e.message}")
             }
+        }
+    }
+
+    private suspend fun addWorkoutTotalCalories(
+        workout: ExerciseSessionRecord,
+        jsWorkout: JSObject
+    ): Boolean {
+        return try {
+            val totalCalories = sumActiveAndBasalCalories(
+                TimeRangeFilter.between(workout.startTime, workout.endTime),
+                includeTotalMetricFallback = true
+            )
+            if (totalCalories != null) {
+                jsWorkout.put("calories", totalCalories)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "addWorkoutTotalCalories: Failed to derive calories", e)
+            false
         }
     }
 

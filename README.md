@@ -334,7 +334,7 @@ Query aggregated data
 **Returns:** <code>Promise&lt;<a href="#queryaggregatedresponse">QueryAggregatedResponse</a>&gt;</code>
 
 - Blood-pressure aggregates return the systolic average in `value` plus `systolic`, `diastolic`, and `unit`.
-- On iOS `total-calories` is derived as active + basal energy (Android uses Health Connect's total calories when available).
+- `total-calories` is derived as active + basal energy on both iOS and Android for latest samples, aggregated queries, and workouts. We fall back to the platform's total‑calories metric (or active calories) when basal data isn't available or permission is missing. Request both `READ_ACTIVE_CALORIES` and `READ_BASAL_CALORIES` for full totals.
 - Weight/height aggregation returns the latest sample per day (no averaging).
 - Android aggregation currently supports daily buckets; unsupported buckets will be rejected.
 - Android `distance-cycling` aggregates distance recorded during biking exercise sessions (requires distance + workouts permissions).
@@ -373,6 +373,8 @@ Query latest sample for a specific data type
 | **`request`** | <code>{ dataType: string; }</code> |
 
 **Returns:** <code>Promise&lt;<a href="#querylatestsampleresponse">QueryLatestSampleResponse</a>&gt;</code>
+
+- Latest sleep sample returns the most recent complete sleep session (asleep states only) from the last ~36 hours; if a longer overnight session exists, shorter naps are ignored.
 
 --------------------
 

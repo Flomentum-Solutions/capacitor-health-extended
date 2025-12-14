@@ -161,26 +161,85 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("Sleep type not available")
                 return
             }
-            
-            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-            let predicate = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: .strictEndDate)
-            
-            let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, error in
-                guard let sleepSample = samples?.first as? HKCategorySample else {
-                    if let error = error {
-                        call.reject("Error fetching latest sleep sample", "NO_SAMPLE", error)
-                    } else {
-                        call.reject("No sleep sample found", "NO_SAMPLE")
-                    }
+
+            let endDate = Date()
+            let startDate = Calendar.current.date(byAdding: .hour, value: -36, to: endDate) ?? endDate.addingTimeInterval(-36 * 3600)
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictEndDate)
+
+            let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error = error {
+                    call.reject("Error fetching latest sleep sample", "NO_SAMPLE", error)
                     return
                 }
-                let durationMinutes = sleepSample.endDate.timeIntervalSince(sleepSample.startDate) / 60
+                guard let categorySamples = samples as? [HKCategorySample], !categorySamples.isEmpty else {
+                    call.reject("No sleep sample found", "NO_SAMPLE")
+                    return
+                }
+
+                let asleepValues: Set<Int> = {
+                    var values: [Int] = [HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue]
+                    if #available(iOS 16.0, *) {
+                        values.append(contentsOf: [
+                            HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                            HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                            HKCategoryValueSleepAnalysis.asleepREM.rawValue
+                        ])
+                    }
+                    return Set(values)
+                }()
+
+                func isAsleep(_ value: Int) -> Bool {
+                    if asleepValues.contains(value) {
+                        return true
+                    }
+                    // Fallback: treat any non in-bed/awake as asleep
+                    return value != HKCategoryValueSleepAnalysis.inBed.rawValue &&
+                        value != HKCategoryValueSleepAnalysis.awake.rawValue
+                }
+
+                let asleepSamples = categorySamples
+                    .filter { isAsleep($0.value) }
+                    .sorted { $0.startDate < $1.startDate }
+
+                guard !asleepSamples.isEmpty else {
+                    call.reject("No sleep sample found", "NO_SAMPLE")
+                    return
+                }
+
+                let maxGap: TimeInterval = 90 * 60 // 90 minutes separates sessions
+                var sessions: [(start: Date, end: Date, duration: TimeInterval)] = []
+                var currentStart: Date?
+                var currentEnd: Date?
+                var currentDuration: TimeInterval = 0
+
+                for sample in asleepSamples {
+                    if let lastEnd = currentEnd, sample.startDate.timeIntervalSince(lastEnd) > maxGap {
+                        sessions.append((start: currentStart ?? lastEnd, end: lastEnd, duration: currentDuration))
+                        currentStart = nil
+                        currentEnd = nil
+                        currentDuration = 0
+                    }
+                    if currentStart == nil { currentStart = sample.startDate }
+                    currentEnd = sample.endDate
+                    currentDuration += sample.endDate.timeIntervalSince(sample.startDate)
+                }
+                if let start = currentStart, let end = currentEnd {
+                    sessions.append((start: start, end: end, duration: currentDuration))
+                }
+
+                guard !sessions.isEmpty else {
+                    call.reject("No sleep sample found", "NO_SAMPLE")
+                    return
+                }
+
+                let minSessionDuration: TimeInterval = 3 * 3600 // prefer sessions 3h+
+                let preferredSession = sessions.reversed().first { $0.duration >= minSessionDuration } ?? sessions.last!
+
                 call.resolve([
-                    "value": durationMinutes,
-                    "timestamp": sleepSample.startDate.timeIntervalSince1970 * 1000,
-                    "endTimestamp": sleepSample.endDate.timeIntervalSince1970 * 1000,
-                    "unit": "min",
-                    "metadata": ["state": sleepSample.value]
+                    "value": preferredSession.duration / 60,
+                    "timestamp": preferredSession.start.timeIntervalSince1970 * 1000,
+                    "endTimestamp": preferredSession.end.timeIntervalSince1970 * 1000,
+                    "unit": "min"
                 ])
             }
             healthStore.execute(query)
@@ -725,8 +784,9 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             let calendar = Calendar.current
             if let categorySamples = samples as? [HKCategorySample], error == nil {
                 for sample in categorySamples {
-                    // Ignore in-bed samples; we care about actual sleep
+                    // Ignore in-bed and awake samples; we care about actual sleep
                     if sample.value == HKCategoryValueSleepAnalysis.inBed.rawValue { continue }
+                    if sample.value == HKCategoryValueSleepAnalysis.awake.rawValue { continue }
                     let startOfDay = calendar.startOfDay(for: sample.startDate)
                     let duration = sample.endDate.timeIntervalSince(sample.startDate)
                     dailyDurations[startOfDay, default: 0] += duration
@@ -821,52 +881,55 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         healthStore.execute(query)
     }
 
+    private func sumEnergy(
+        _ identifier: HKQuantityTypeIdentifier,
+        startDate: Date,
+        endDate: Date,
+        completion: @escaping (Double?, Error?) -> Void
+    ) {
+        guard let type = HKObjectType.quantityType(forIdentifier: identifier) else {
+            completion(nil, NSError(domain: "HealthKit", code: -1, userInfo: [NSLocalizedDescriptionKey: "Quantity type unavailable"]))
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        let query = HKStatisticsQuery(
+            quantityType: type,
+            quantitySamplePredicate: predicate,
+            options: .cumulativeSum
+        ) { _, result, error in
+            if let error = error {
+                completion(nil, error)
+                return
+            }
+            let value = result?.sumQuantity()?.doubleValue(for: HKUnit.kilocalorie())
+            completion(value, nil)
+        }
+        healthStore.execute(query)
+    }
+
     private func queryLatestTotalCalories(_ call: CAPPluginCall) {
         let unit = HKUnit.kilocalorie()
         let group = DispatchGroup()
+        let now = Date()
+        let startOfDay = Calendar.current.startOfDay(for: now)
 
-        var activeValue: Double?
-        var basalValue: Double?
-        var activeDate: Date?
-        var basalDate: Date?
+        var activeTotal: Double?
+        var basalTotal: Double?
         var queryError: Error?
         let basalSupported = HKObjectType.quantityType(forIdentifier: .basalEnergyBurned) != nil
 
-        func fetchLatest(_ identifier: HKQuantityTypeIdentifier, completion: @escaping (Double?, Date?, Error?) -> Void) {
-            guard let type = HKObjectType.quantityType(forIdentifier: identifier) else {
-                completion(nil, nil, NSError(domain: "HealthKit", code: -1, userInfo: [NSLocalizedDescriptionKey: "Quantity type unavailable"]))
-                return
-            }
-            let predicate = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: .strictEndDate)
-            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [sort]) { _, samples, error in
-                if let error = error {
-                    completion(nil, nil, error)
-                    return
-                }
-                guard let sample = samples?.first as? HKQuantitySample else {
-                    completion(nil, nil, nil)
-                    return
-                }
-                completion(sample.quantity.doubleValue(for: unit), sample.startDate, nil)
-            }
-            healthStore.execute(query)
-        }
-
         group.enter()
-        fetchLatest(.activeEnergyBurned) { value, date, error in
-            activeValue = value
-            activeDate = date
-            queryError = queryError ?? error
+        sumEnergy(.activeEnergyBurned, startDate: startOfDay, endDate: now) { value, error in
+            activeTotal = value
+            if queryError == nil { queryError = error }
             group.leave()
         }
 
         if basalSupported {
             group.enter()
-            fetchLatest(.basalEnergyBurned) { value, date, error in
-                basalValue = value
-                basalDate = date
-                queryError = queryError ?? error
+            sumEnergy(.basalEnergyBurned, startDate: startOfDay, endDate: now) { value, error in
+                basalTotal = value
+                if queryError == nil { queryError = error }
                 group.leave()
             }
         }
@@ -876,15 +939,14 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("Error fetching total calories: \(error.localizedDescription)")
                 return
             }
-            guard activeValue != nil || basalValue != nil else {
+            guard activeTotal != nil || basalTotal != nil else {
                 call.reject("No sample found", "NO_SAMPLE")
                 return
             }
-            let total = (activeValue ?? 0) + (basalValue ?? 0)
-            let timestamp = max(activeDate?.timeIntervalSince1970 ?? 0, basalDate?.timeIntervalSince1970 ?? 0) * 1000
+            let total = (activeTotal ?? 0) + (basalTotal ?? 0)
             call.resolve([
                 "value": total,
-                "timestamp": timestamp,
+                "timestamp": now.timeIntervalSince1970 * 1000,
                 "unit": unit.unitString
             ])
         }
