@@ -24,6 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
       - run: npm run build
@@ -33,7 +34,9 @@ jobs:
       # Use '--provenance' to link the package to this repo securely.
       # Note: We removed the 'env: NODE_AUTH_TOKEN' block entirely.
       # -----------------------------------------------------------------
-      - run: npm publish --provenance
+      - run: npm publish --provenance --access public
+        env:
+          CI: true
         
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1

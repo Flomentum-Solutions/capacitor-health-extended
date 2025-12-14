@@ -17,7 +17,7 @@
     "ios/Sources",
     "ios/Tests",
     "Package.swift",
-    "FlomentumSolutionsCapacitorHealthExtended.podspec"
+    "FlomentumsolutionsCapacitorHealthExtended.podspec"
   ],
   "author": {
     "name": "Flomentum Solutions, LLC",
