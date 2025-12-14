@@ -177,15 +177,17 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
 
                 let asleepValues: Set<Int> = {
-                    var values: [Int] = [HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue]
                     if #available(iOS 16.0, *) {
-                        values.append(contentsOf: [
+                        return Set([
+                            HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
                             HKCategoryValueSleepAnalysis.asleepCore.rawValue,
                             HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
                             HKCategoryValueSleepAnalysis.asleepREM.rawValue
                         ])
+                    } else {
+                        // Pre-iOS 16 only exposes the legacy "asleep" value.
+                        return Set([HKCategoryValueSleepAnalysis.asleep.rawValue])
                     }
-                    return Set(values)
                 }()
 
                 func isAsleep(_ value: Int) -> Bool {
@@ -597,7 +599,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         if bucket == "day" {
             startDate = calendar.startOfDay(for: rawStartDate)
             let endDayStart = calendar.startOfDay(for: rawEndDate)
-            endDate = calendar.date(byAdding: .day, to: endDayStart) ?? endDayStart
+            endDate = calendar.date(byAdding: .day, value: 1, to: endDayStart) ?? endDayStart
         }
         if dataTypeString == "mindfulness" {
             self.queryMindfulnessAggregated(startDate: startDate, endDate: endDate) { result, error in
