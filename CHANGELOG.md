@@ -5,6 +5,17 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.4.5] – Unreleased  
+### Fixed
+- SwiftPM/Xcode builds now declare the Cordova binary target alongside Capacitor so the module resolves correctly.
+- iOS latest sleep query now gates new sleep stages to iOS 16+ and falls back to the legacy `asleep` value on earlier OS versions, avoiding missing symbol errors.
+- Daily bucket end-date calculation now uses `Calendar.Component.day` to advance one full day, fixing the build error and keeping day buckets aligned.
+
+### Security
+- None
+
+---
+
 ## [0.4.4] – 2025-12-15  
 ### Fixed
 - `total-calories` now correctly derives active + basal energy on both iOS and Android for latest samples, aggregated queries, and workouts; falls back to the platform total or active calories when basal data/permission is unavailable.
