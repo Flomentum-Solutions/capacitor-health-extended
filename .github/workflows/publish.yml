@@ -16,7 +16,7 @@ jobs:
     # -----------------------------------------------------------------
     permissions:
       contents: write  # For creating the GitHub Release
-      id-token: write  # CRITICAL: For npm OIDC authentication
+      # id-token: write  # CRITICAL: For npm OIDC authentication
 
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +34,9 @@ jobs:
       # Use '--provenance' to link the package to this repo securely.
       # Note: We removed the 'env: NODE_AUTH_TOKEN' block entirely.
       # -----------------------------------------------------------------
-      - run: npm publish --provenance --access public
+      - run: npm publish --access public # --provenance
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           CI: true
         
       - name: Create GitHub Release
