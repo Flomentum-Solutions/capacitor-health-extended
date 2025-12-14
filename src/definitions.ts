@@ -216,6 +216,9 @@ export interface AggregatedSample {
   startDate: string;
   endDate: string;
   value: number;
+  systolic?: number;
+  diastolic?: number;
+  unit?: string;
 }
 
 export interface QueryLatestSampleResponse {

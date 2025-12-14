@@ -14,8 +14,7 @@ import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
-import androidx.health.connect.client.units.Energy
-import androidx.health.connect.client.records.InstantaneousRecord
+import androidx.health.connect.client.records.Record
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -27,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.Period
 import java.time.ZoneId
@@ -63,7 +63,7 @@ enum class CapHealthPermission {
         fun from(s: String): CapHealthPermission? {
             return try {
                 CapHealthPermission.valueOf(s)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
             }
         }
@@ -316,6 +316,11 @@ class HealthPlugin : Plugin() {
     private fun getMetricAndMapper(dataType: String): MetricAndMapper {
         return when (dataType) {
             "steps" -> metricAndMapper("steps", CapHealthPermission.READ_STEPS, StepsRecord.COUNT_TOTAL) { it?.toDouble() }
+            "heart-rate", "heartRate" -> metricAndMapper(
+                "heartRate",
+                CapHealthPermission.READ_HEART_RATE,
+                HeartRateRecord.BPM_AVG
+            ) { it?.toDouble() }
             "active-calories", "activeCalories" -> metricAndMapper(
                 "calories",
                 CapHealthPermission.READ_ACTIVE_CALORIES,
@@ -327,12 +332,11 @@ class HealthPlugin : Plugin() {
                 TotalCaloriesBurnedRecord.ENERGY_TOTAL
             ) { it?.inKilocalories }
             "distance" -> metricAndMapper("distance", CapHealthPermission.READ_DISTANCE, DistanceRecord.DISTANCE_TOTAL) { it?.inMeters }
-            "distance-cycling" -> metricAndMapper("distance", CapHealthPermission.READ_DISTANCE, DistanceRecord.DISTANCE_TOTAL) { it?.inMeters }
             "flights-climbed" -> metricAndMapper(
                 "flightsClimbed",
                 CapHealthPermission.READ_FLOORS_CLIMBED,
                 FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL
-            ) { it?.toDouble() }
+            ) { it }
             "mindfulness" -> metricAndMapper(
                 "mindfulness",
                 CapHealthPermission.READ_MINDFULNESS,
@@ -342,12 +346,12 @@ class HealthPlugin : Plugin() {
                 "basalCalories",
                 CapHealthPermission.READ_BASAL_CALORIES,
                 BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL
-            ) { (it as Energy?)?.kilocalories }
+            ) { it?.inKilocalories }
             "resting-heart-rate" -> metricAndMapper(
                 "restingHeartRate",
                 CapHealthPermission.READ_RESTING_HEART_RATE,
                 RestingHeartRateRecord.BPM_AVG
-            ) { (it as Long?)?.toDouble() }
+            ) { it?.toDouble() }
             else -> throw RuntimeException("Unsupported dataType: $dataType")
         }
     }
@@ -448,13 +452,14 @@ class HealthPlugin : Plugin() {
         val request = ReadRecordsRequest(
             recordType = WeightRecord::class,
             timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            ascendingOrder = false,
             pageSize = 1
         )
         val record = healthConnectClient.readRecords(request).records.firstOrNull()
 
         return JSObject().apply {
-            put("value", record?.weight?.inKilograms ?: 0)
-            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("value", record?.weight?.inKilograms)
+            put("timestamp", record?.time?.toEpochMilli())
             put("unit", "kg")
         }
     }
@@ -520,13 +525,14 @@ class HealthPlugin : Plugin() {
         val request = ReadRecordsRequest(
             recordType = HeightRecord::class,
             timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            ascendingOrder = false,
             pageSize = 1
         )
         val record = healthConnectClient.readRecords(request).records.firstOrNull()
 
         return JSObject().apply {
-            put("value", record?.height?.inMeters ?: 0)
-            put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
+            put("value", record?.height?.inMeters)
+            put("timestamp", record?.time?.toEpochMilli())
             put("unit", "m")
         }
     }
@@ -633,7 +639,7 @@ class HealthPlugin : Plugin() {
             meta.put("mealType", it.mealType)
         }
         return JSObject().apply {
-            put("value", record?.level?.milligramsPerDeciliter ?: 0.0)
+            put("value", record?.level?.inMilligramsPerDeciliter ?: 0.0)
             put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
             put("unit", "mg/dL")
             put("metadata", meta)
@@ -651,7 +657,7 @@ class HealthPlugin : Plugin() {
         )
         val record = healthConnectClient.readRecords(request).records.firstOrNull()
         return JSObject().apply {
-            put("value", record?.temperature?.celsius ?: 0.0)
+            put("value", record?.temperature?.inCelsius ?: 0.0)
             put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
             put("unit", "degC")
         }
@@ -668,7 +674,7 @@ class HealthPlugin : Plugin() {
         )
         val record = healthConnectClient.readRecords(request).records.firstOrNull()
         return JSObject().apply {
-            put("value", record?.temperature?.celsius ?: 0.0)
+            put("value", record?.temperature?.inCelsius ?: 0.0)
             put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
             put("unit", "degC")
         }
@@ -702,7 +708,7 @@ class HealthPlugin : Plugin() {
         )
         val record = healthConnectClient.readRecords(request).records.firstOrNull()
         return JSObject().apply {
-            put("value", record?.basalMetabolicRate?.kilocaloriesPerDay ?: 0.0)
+            put("value", record?.basalMetabolicRate?.inKilocaloriesPerDay ?: 0.0)
             put("timestamp", (record?.time?.epochSecond ?: 0) * 1000)
             put("unit", "kcal/day")
         }
@@ -829,173 +835,133 @@ class HealthPlugin : Plugin() {
                 return
             }
 
-            val startDateTime = Instant.parse(startDate).atZone(ZoneId.systemDefault()).toLocalDateTime()
-            val endDateTime = Instant.parse(endDate).atZone(ZoneId.systemDefault()).toLocalDateTime()
+            val (startDateTime, endDateTime) = normalizeTimeRangeForBucket(
+                Instant.parse(startDate),
+                Instant.parse(endDate),
+                bucket
+            )
 
             val period = when (bucket) {
                 "day" -> Period.ofDays(1)
                 else -> throw RuntimeException("Unsupported bucket: $bucket")
             }
 
-            // Special handling for HRV (RMSSD) because aggregate metrics were
-            // removed in Health Connect 1.1‑rc03. We calculate the daily average
-            // from raw samples instead.
-            if (dataType == "hrv") {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val hrvSamples = aggregateHrvByPeriod(
-                            TimeRangeFilter.between(startDateTime, endDateTime),
-                            period
-                        )
-                        val aggregatedList = JSArray()
-                        hrvSamples.forEach { aggregatedList.put(it.toJs()) }
-                        val finalResult = JSObject()
-                        finalResult.put("aggregatedData", aggregatedList)
-                        call.resolve(finalResult)
-                    } catch (e: Exception) {
-                        call.reject("Error querying aggregated HRV data: ${e.message}")
-                    }
-                }
-                return  // skip the normal aggregate path
-            }
-
-            if (dataType == "exercise-time") {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val exerciseDurations = aggregateExerciseTime(
-                            TimeRangeFilter.between(startDateTime, endDateTime),
-                            period
-                        )
-                        val aggregatedList = JSArray()
-                        exerciseDurations.forEach { aggregatedList.put(it.toJs()) }
-                        val finalResult = JSObject()
-                        finalResult.put("aggregatedData", aggregatedList)
-                        call.resolve(finalResult)
-                    } catch (e: Exception) {
-                        call.reject("Error querying aggregated exercise time: ${e.message}")
-                    }
-                }
-                return
-            }
-
-            if (dataType == "sleep") {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val sleepDurations = aggregateSleepSessions(
-                            TimeRangeFilter.between(startDateTime, endDateTime),
-                            period
-                        )
-                        val aggregatedList = JSArray()
-                        sleepDurations.forEach { aggregatedList.put(it.toJs()) }
-                        val finalResult = JSObject()
-                        finalResult.put("aggregatedData", aggregatedList)
-                        call.resolve(finalResult)
-                    } catch (e: Exception) {
-                        call.reject("Error querying aggregated sleep data: ${e.message}")
-                    }
-                }
-                return
-            }
-
-            if (dataType == "mindfulness") {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val metricAndMapper = getMetricAndMapper(dataType)
-                        val r = queryAggregatedMetric(
-                            metricAndMapper,
-                            TimeRangeFilter.between(startDateTime, endDateTime),
-                            period
-                        )
-                        val aggregatedList = JSArray()
-                        r.forEach { aggregatedList.put(it.toJs()) }
-                        val finalResult = JSObject()
-                        finalResult.put("aggregatedData", aggregatedList)
-                        call.resolve(finalResult)
-                    } catch (e: Exception) {
-                        call.reject("Error querying aggregated mindfulness data: ${e.message}")
-                    }
-                }
-                return
-            }
-
-            if (setOf(
-                    "respiratory-rate",
-                    "oxygen-saturation",
-                    "blood-glucose",
-                    "body-temperature",
-                    "basal-body-temperature",
-                    "body-fat"
-                ).contains(dataType)
-            ) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val aggregated = when (dataType) {
-                            "respiratory-rate" -> aggregateInstantAverage(
-                                RespiratoryRateRecord::class,
-                                CapHealthPermission.READ_RESPIRATORY_RATE,
-                                TimeRangeFilter.between(startDateTime, endDateTime),
-                                period
-                            ) { it.rate }
-
-                            "oxygen-saturation" -> aggregateInstantAverage(
-                                OxygenSaturationRecord::class,
-                                CapHealthPermission.READ_OXYGEN_SATURATION,
-                                TimeRangeFilter.between(startDateTime, endDateTime),
-                                period
-                            ) { it.percentage.value }
-
-                            "blood-glucose" -> aggregateInstantAverage(
-                                BloodGlucoseRecord::class,
-                                CapHealthPermission.READ_BLOOD_GLUCOSE,
-                                TimeRangeFilter.between(startDateTime, endDateTime),
-                                period
-                            ) { it.level.milligramsPerDeciliter }
-
-                            "body-temperature" -> aggregateInstantAverage(
-                                BodyTemperatureRecord::class,
-                                CapHealthPermission.READ_BODY_TEMPERATURE,
-                                TimeRangeFilter.between(startDateTime, endDateTime),
-                                period
-                            ) { it.temperature.celsius }
-
-                            "basal-body-temperature" -> aggregateInstantAverage(
-                                BasalBodyTemperatureRecord::class,
-                                CapHealthPermission.READ_BASAL_BODY_TEMPERATURE,
-                                TimeRangeFilter.between(startDateTime, endDateTime),
-                                period
-                            ) { it.temperature.celsius }
-
-                            "body-fat" -> aggregateInstantAverage(
-                                BodyFatRecord::class,
-                                CapHealthPermission.READ_BODY_FAT,
-                                TimeRangeFilter.between(startDateTime, endDateTime),
-                                period
-                            ) { it.percentage.value }
-
-                            else -> emptyList()
-                        }
-                        val aggregatedList = JSArray()
-                        aggregated.forEach { aggregatedList.put(it.toJs()) }
-                        val finalResult = JSObject()
-                        finalResult.put("aggregatedData", aggregatedList)
-                        call.resolve(finalResult)
-                    } catch (e: Exception) {
-                        call.reject("Error querying aggregated data: ${e.message}")
-                    }
-                }
-                return
-            }
+            val timeRange = TimeRangeFilter.between(startDateTime, endDateTime)
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val metricAndMapper = getMetricAndMapper(dataType)
-                    val r = queryAggregatedMetric(
-                        metricAndMapper,
-                        TimeRangeFilter.between(startDateTime, endDateTime),
-                        period
-                    )
                     val aggregatedList = JSArray()
-                    r.forEach { aggregatedList.put(it.toJs()) }
+
+                    when {
+                        // Special handling for HRV (RMSSD) because aggregate metrics were
+                        // removed in Health Connect 1.1‑rc03. We calculate the daily average
+                        // from raw samples instead.
+                        dataType == "hrv" -> aggregateHrvByPeriod(timeRange, period)
+                            .forEach { aggregatedList.put(it.toJs()) }
+
+                        dataType == "exercise-time" -> aggregateExerciseTime(timeRange, period)
+                            .forEach { aggregatedList.put(it.toJs()) }
+
+                        dataType == "sleep" -> aggregateSleepSessions(timeRange, period)
+                            .forEach { aggregatedList.put(it.toJs()) }
+
+                        dataType == "blood-pressure" -> aggregateBloodPressure(timeRange, period)
+                            .forEach { aggregatedList.put(it.toJs()) }
+
+                        dataType == "distance-cycling" -> aggregateCyclingDistance(timeRange, period)
+                            .forEach { aggregatedList.put(it.toJs()) }
+
+                        dataType == "weight" -> aggregateInstantLatestPerDay(
+                            WeightRecord::class,
+                            CapHealthPermission.READ_WEIGHT,
+                            timeRange,
+                            period,
+                            { it.time }
+                        ) { it.weight.inKilograms }
+                            .forEach { aggregatedList.put(it.toJs()) }
+
+                        dataType == "height" -> aggregateInstantLatestPerDay(
+                            HeightRecord::class,
+                            CapHealthPermission.READ_HEIGHT,
+                            timeRange,
+                            period,
+                            { it.time }
+                        ) { it.height.inMeters }
+                            .forEach { aggregatedList.put(it.toJs()) }
+
+                        setOf(
+                            "respiratory-rate",
+                            "oxygen-saturation",
+                            "blood-glucose",
+                            "body-temperature",
+                            "basal-body-temperature",
+                            "body-fat"
+                        ).contains(dataType) -> {
+                            val aggregated = when (dataType) {
+                                "respiratory-rate" -> aggregateInstantAverage(
+                                    RespiratoryRateRecord::class,
+                                    CapHealthPermission.READ_RESPIRATORY_RATE,
+                                    timeRange,
+                                    period,
+                                    { it.time }
+                                ) { it.rate }
+
+                                "oxygen-saturation" -> aggregateInstantAverage(
+                                    OxygenSaturationRecord::class,
+                                    CapHealthPermission.READ_OXYGEN_SATURATION,
+                                    timeRange,
+                                    period,
+                                    { it.time }
+                                ) { it.percentage.value }
+
+                                "blood-glucose" -> aggregateInstantAverage(
+                                    BloodGlucoseRecord::class,
+                                    CapHealthPermission.READ_BLOOD_GLUCOSE,
+                                    timeRange,
+                                    period,
+                                    { it.time }
+                                ) { it.level.inMilligramsPerDeciliter }
+
+                                "body-temperature" -> aggregateInstantAverage(
+                                    BodyTemperatureRecord::class,
+                                    CapHealthPermission.READ_BODY_TEMPERATURE,
+                                    timeRange,
+                                    period,
+                                    { it.time }
+                                ) { it.temperature.inCelsius }
+
+                                "basal-body-temperature" -> aggregateInstantAverage(
+                                    BasalBodyTemperatureRecord::class,
+                                    CapHealthPermission.READ_BASAL_BODY_TEMPERATURE,
+                                    timeRange,
+                                    period,
+                                    { it.time }
+                                ) { it.temperature.inCelsius }
+
+                                "body-fat" -> aggregateInstantAverage(
+                                    BodyFatRecord::class,
+                                    CapHealthPermission.READ_BODY_FAT,
+                                    timeRange,
+                                    period,
+                                    { it.time }
+                                ) { it.percentage.value }
+
+                                else -> emptyList()
+                            }
+                            aggregated.forEach { aggregatedList.put(it.toJs()) }
+                        }
+
+                        else -> {
+                            val metricAndMapper = getMetricAndMapper(dataType)
+                            val r = queryAggregatedMetric(
+                                metricAndMapper,
+                                timeRange,
+                                period
+                            )
+                            r.forEach { aggregatedList.put(it.toJs()) }
+                        }
+                    }
+
                     val finalResult = JSObject()
                     finalResult.put("aggregatedData", aggregatedList)
                     call.resolve(finalResult)
@@ -1007,6 +973,25 @@ class HealthPlugin : Plugin() {
             call.reject(e.message)
             return
         }
+    }
+
+
+    private fun normalizeTimeRangeForBucket(
+        startInstant: Instant,
+        endInstant: Instant,
+        bucket: String
+    ): Pair<LocalDateTime, LocalDateTime> {
+        val zone = ZoneId.systemDefault()
+        if (bucket == "day") {
+            val startOfDay = startInstant.atZone(zone).toLocalDate().atStartOfDay()
+            val endOfDay = endInstant.atZone(zone).toLocalDate().plusDays(1).atStartOfDay()
+            return Pair(startOfDay, endOfDay)
+        }
+
+        return Pair(
+            startInstant.atZone(zone).toLocalDateTime(),
+            endInstant.atZone(zone).toLocalDateTime()
+        )
     }
 
 
@@ -1040,6 +1025,24 @@ class HealthPlugin : Plugin() {
 
             return o
 
+        }
+    }
+
+    data class AggregatedBloodPressureSample(
+        val startDate: LocalDateTime,
+        val endDate: LocalDateTime,
+        val systolic: Double?,
+        val diastolic: Double?
+    ) {
+        fun toJs(): JSObject {
+            val o = JSObject()
+            o.put("startDate", startDate)
+            o.put("endDate", endDate)
+            o.put("systolic", systolic)
+            o.put("diastolic", diastolic)
+            o.put("value", systolic)
+            o.put("unit", "mmHg")
+            return o
         }
     }
 
@@ -1090,20 +1093,22 @@ class HealthPlugin : Plugin() {
             .groupBy { it.time.atZone(ZoneId.systemDefault()).toLocalDate() }
             .map { (localDate, recs) ->
                 val avg = recs.map { it.heartRateVariabilityMillis }.average()
+                val start = localDate.atStartOfDay()
                 AggregatedSample(
-                    localDate.atStartOfDay(),
-                    localDate.plusDays(1).atStartOfDay(),
+                    start,
+                    start.plusDays(1),
                     if (avg.isNaN()) null else avg
                 )
             }
             .sortedBy { it.startDate }
     }
 
-    private suspend fun <T : InstantaneousRecord> aggregateInstantAverage(
+    private suspend fun <T : Record> aggregateInstantAverage(
         recordType: KClass<T>,
         permission: CapHealthPermission,
         timeRange: TimeRangeFilter,
         period: Period,
+        timeSelector: (T) -> Instant,
         valueSelector: (T) -> Double?
     ): List<AggregatedSample> {
         if (!hasPermission(permission)) {
@@ -1121,13 +1126,105 @@ class HealthPlugin : Plugin() {
         )
 
         return response.records
-            .groupBy { it.time.atZone(ZoneId.systemDefault()).toLocalDate() }
+            .groupBy { timeSelector(it).atZone(ZoneId.systemDefault()).toLocalDate() }
             .map { (localDate, recs) ->
                 val avg = recs.mapNotNull(valueSelector).average()
+                val start = localDate.atStartOfDay()
                 AggregatedSample(
-                    localDate.atStartOfDay(),
-                    localDate.plusDays(1).atStartOfDay(),
+                    start,
+                    start.plusDays(1),
                     if (avg.isNaN()) null else avg
+                )
+            }
+            .sortedBy { it.startDate }
+    }
+
+    // Average systolic/diastolic per day from raw blood pressure samples.
+    private suspend fun aggregateBloodPressure(
+        timeRange: TimeRangeFilter,
+        period: Period
+    ): List<AggregatedBloodPressureSample> {
+        if (!hasPermission(CapHealthPermission.READ_BLOOD_PRESSURE)) {
+            return emptyList()
+        }
+        if (period != Period.ofDays(1)) {
+            throw RuntimeException("Unsupported bucket for blood pressure aggregation")
+        }
+
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = BloodPressureRecord::class,
+                timeRangeFilter = timeRange
+            )
+        )
+
+        return response.records
+            .groupBy { it.time.atZone(ZoneId.systemDefault()).toLocalDate() }
+            .map { (localDate, recs) ->
+                val systolicAvg = recs.map { it.systolic.inMillimetersOfMercury }.average()
+                val diastolicAvg = recs.map { it.diastolic.inMillimetersOfMercury }.average()
+                val start = localDate.atStartOfDay()
+                AggregatedBloodPressureSample(
+                    start,
+                    start.plusDays(1),
+                    if (systolicAvg.isNaN()) null else systolicAvg,
+                    if (diastolicAvg.isNaN()) null else diastolicAvg
+                )
+            }
+            .sortedBy { it.startDate }
+    }
+
+    // Sum cycling distance by restricting to biking sessions to avoid mixing in walking/running data.
+    private suspend fun aggregateCyclingDistance(
+        timeRange: TimeRangeFilter,
+        period: Period
+    ): List<AggregatedSample> {
+        if (!hasPermission(CapHealthPermission.READ_WORKOUTS) || !hasPermission(CapHealthPermission.READ_DISTANCE)) {
+            return emptyList()
+        }
+        if (period != Period.ofDays(1)) {
+            throw RuntimeException("Unsupported bucket for cycling distance aggregation")
+        }
+
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                timeRangeFilter = timeRange,
+                dataOriginFilter = emptySet(),
+                ascendingOrder = true,
+                pageSize = 1000
+            )
+        )
+
+        val cyclingTypes = setOf(
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING,
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY
+        )
+
+        val dailyDistance = mutableMapOf<LocalDate, Double>()
+        for (session in response.records.filter { cyclingTypes.contains(it.exerciseType) }) {
+            try {
+                val request = AggregateRequest(
+                    setOf(DistanceRecord.DISTANCE_TOTAL),
+                    TimeRangeFilter.between(session.startTime, session.endTime),
+                    setOf(session.metadata.dataOrigin)
+                )
+                val aggregation = healthConnectClient.aggregate(request)
+                val distance = aggregation[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
+                val localDate = session.startTime.atZone(ZoneId.systemDefault()).toLocalDate()
+                dailyDistance[localDate] = dailyDistance.getOrDefault(localDate, 0.0) + distance
+            } catch (e: Exception) {
+                Log.e(tag, "aggregateCyclingDistance: Failed to aggregate session distance", e)
+            }
+        }
+
+        return dailyDistance.entries
+            .map { (localDate, distance) ->
+                val start = localDate.atStartOfDay()
+                AggregatedSample(
+                    start,
+                    start.plusDays(1),
+                    distance
                 )
             }
             .sortedBy { it.startDate }
@@ -1147,7 +1244,7 @@ class HealthPlugin : Plugin() {
             ReadRecordsRequest(
                 recordType = ExerciseSessionRecord::class,
                 timeRangeFilter = timeRange,
-                dataOriginsFilter = emptySet(),
+                dataOriginFilter = emptySet(),
                 ascendingOrder = true,
                 pageSize = 1000
             )
@@ -1162,10 +1259,51 @@ class HealthPlugin : Plugin() {
                         session.segments.sumOf { it.endTime.epochSecond - it.startTime.epochSecond }
                     }
                 }
+                val start = localDate.atStartOfDay()
                 AggregatedSample(
-                    localDate.atStartOfDay(),
-                    localDate.plusDays(1).atStartOfDay(),
+                    start,
+                    start.plusDays(1),
                     totalSeconds / 60.0
+                )
+            }
+            .sortedBy { it.startDate }
+    }
+
+    private suspend fun <T : Record> aggregateInstantLatestPerDay(
+        recordType: KClass<T>,
+        permission: CapHealthPermission,
+        timeRange: TimeRangeFilter,
+        period: Period,
+        timeSelector: (T) -> Instant,
+        valueSelector: (T) -> Double?
+    ): List<AggregatedSample> {
+        if (!hasPermission(permission)) {
+            return emptyList()
+        }
+        if (period != Period.ofDays(1)) {
+            throw RuntimeException("Unsupported bucket for aggregation")
+        }
+
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = recordType,
+                timeRangeFilter = timeRange,
+                dataOriginFilter = emptySet(),
+                ascendingOrder = false,
+                pageSize = 1000
+            )
+        )
+
+        return response.records
+            .groupBy { timeSelector(it).atZone(ZoneId.systemDefault()).toLocalDate() }
+            .mapNotNull { (localDate, recs) ->
+                val latest = recs.maxByOrNull { timeSelector(it) } ?: return@mapNotNull null
+                val value = valueSelector(latest)
+                val start = localDate.atStartOfDay()
+                AggregatedSample(
+                    start,
+                    start.plusDays(1),
+                    value
                 )
             }
             .sortedBy { it.startDate }
@@ -1192,9 +1330,10 @@ class HealthPlugin : Plugin() {
             .groupBy { it.startTime.atZone(ZoneId.systemDefault()).toLocalDate() }
             .map { (localDate, sessions) ->
                 val totalSeconds = sessions.sumOf { it.endTime.epochSecond - it.startTime.epochSecond }
+                val start = localDate.atStartOfDay()
                 AggregatedSample(
-                    localDate.atStartOfDay(),
-                    localDate.plusDays(1).atStartOfDay(),
+                    start,
+                    start.plusDays(1),
                     totalSeconds.toDouble()
                 )
             }
@@ -1225,7 +1364,13 @@ class HealthPlugin : Plugin() {
 
         val timeRange = TimeRangeFilter.between(startDateTime, endDateTime)
         val request =
-            ReadRecordsRequest(ExerciseSessionRecord::class, timeRange, emptySet(), true, 1000)
+            ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                timeRangeFilter = timeRange,
+                dataOriginFilter = emptySet(),
+                ascendingOrder = true,
+                pageSize = 1000
+            )
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -1318,7 +1463,7 @@ class HealthPlugin : Plugin() {
         try {
             val request = AggregateRequest(
                 setOf(metricAndMapper.metric),
-                TimeRangeFilter.Companion.between(workout.startTime, workout.endTime),
+                TimeRangeFilter.between(workout.startTime, workout.endTime),
                 emptySet()
             )
             val aggregation = healthConnectClient.aggregate(request)

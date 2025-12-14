@@ -5,6 +5,16 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.4.0] – 2025-12-13  
+### Changed
+- Daily aggregated queries now align to local calendar days (start-of-day to end-of-day) instead of a trailing 24-hour window so “today” matches Health app totals.
+- Documentation refreshed to call out the calendar-day bucket behavior for querying current-day values.
+
+### Security
+- None
+
+---
+
 ## [0.3.0] – 2025-12-13  
 ### Added
 - New cross-platform health types: resting heart rate, respiratory rate, oxygen saturation, blood glucose, body temperature (core + basal), body fat, basal calories, flights climbed, cycling distance, exercise time, and sleep sessions.
