@@ -19,7 +19,7 @@ Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fo
 - Node.js 22+ (Latest LTS version is recommended)
 - Capacitor 8
 - iOS 15+ (Xcode 26 + HealthKit + SwiftPM toolchain)
-- Android 14+ (Android Studio Otter 2025.2.1 + Health Connect 1.2.0-alpha02 + Gradle 8.13.0 + Kotlin 2.2.20)
+- Android 16+ (Android Studio Otter 2025.2.1 + Health Connect 1.2.0-alpha02 + Gradle 8.13.0 + Kotlin 2.2.20)
 
 ## Features
 
@@ -90,7 +90,6 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
 ```
 
-
 * Android Manifest in application tag
 ```xml
     <!-- Handle Health Connect rationale (Android 13-) -->
@@ -124,6 +123,69 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
         android:networkSecurityConfig="@xml/network_security_config">
         ...
     </application>
+```
+
+* Create `com.my.app.PermissionsRationaleActivity.kt` with:
+```xml
+package com.my.app
+
+import android.os.Bundle
+import android.util.Log
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.addCallback
+import androidx.appcompat.app.AppCompatActivity
+
+class PermissionsRationaleActivity : AppCompatActivity() {
+    private lateinit var webView: WebView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        supportActionBar?.apply {
+            title = "Privacy Policy"
+            setDisplayHomeAsUpEnabled(true)
+        }
+
+        webView = WebView(this).apply {
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                useWideViewPort = true
+                loadWithOverviewMode = true
+            }
+            webChromeClient = WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest) = false
+                override fun onReceivedError(
+                    view: WebView,
+                    request: android.webkit.WebResourceRequest,
+                    error: android.webkit.WebResourceError
+                ) {
+                    Log.e("WebView", "Failed to load: ${error.description}")
+                }
+                override fun onPageFinished(view: WebView, url: String) {
+                    Log.d("WebView", "Loaded: $url")
+                }
+            }
+            loadUrl("https://mywebsite.com/privacy-policy")
+        }
+
+        setContentView(webView)
+
+        // Device back button behavior
+        onBackPressedDispatcher.addCallback(this) {
+            finish()
+        }
+    }
+
+    // Toolbar Up button behavior
+    override fun onSupportNavigateUp(): Boolean {
+        finish()
+        return true
+    }
+}
 ```
 
 * Create `res/xml/network_security_config.xml` with:
@@ -271,6 +333,13 @@ Query aggregated data
 
 **Returns:** <code>Promise&lt;<a href="#queryaggregatedresponse">QueryAggregatedResponse</a>&gt;</code>
 
+- Blood-pressure aggregates return the systolic average in `value` plus `systolic`, `diastolic`, and `unit`.
+- On iOS `total-calories` is derived as active + basal energy (Android uses Health Connect's total calories when available).
+- Weight/height aggregation returns the latest sample per day (no averaging).
+- Android aggregation currently supports daily buckets; unsupported buckets will be rejected.
+- Android `distance-cycling` aggregates distance recorded during biking exercise sessions (requires distance + workouts permissions).
+- Daily `bucket: "day"` queries use calendar-day boundaries in the device time zone (start-of-day through the next start-of-day) instead of a trailing 24-hour window. For “today,” send `startDate` at today’s start-of-day and `endDate` at now or tomorrow’s start-of-day.
+
 --------------------
 
 
@@ -386,21 +455,24 @@ Query latest steps sample
 
 #### AggregatedSample
 
-| Prop            | Type                |
-| --------------- | ------------------- |
-| **`startDate`** | <code>string</code> |
-| **`endDate`**   | <code>string</code> |
-| **`value`**     | <code>number</code> |
+| Prop              | Type                |
+| ----------------- | ------------------- |
+| **`startDate`**   | <code>string</code> |
+| **`endDate`**     | <code>string</code> |
+| **`value`**       | <code>number</code> |
+| **`systolic`**    | <code>number</code> |
+| **`diastolic`**   | <code>number</code> |
+| **`unit`**        | <code>string</code> |
 
 
 #### QueryAggregatedRequest
 
-| Prop            | Type                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------- |
-| **`startDate`** | <code>string</code>                                                                     |
-| **`endDate`**   | <code>string</code>                                                                     |
-| **`dataType`**  | <code>'steps' \| 'active-calories' \| 'mindfulness' \| 'hrv' \| 'blood-pressure'</code> |
-| **`bucket`**    | <code>string</code>                                                                     |
+| Prop            | Type                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`startDate`** | <code>string</code>                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **`endDate`**   | <code>string</code>                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **`dataType`**  | <code>'steps' \| 'active-calories' \| 'total-calories' \| 'basal-calories' \| 'distance' \| 'distance-cycling' \| 'weight' \| 'height' \| 'heart-rate' \| 'resting-heart-rate' \| 'respiratory-rate' \| 'oxygen-saturation' \| 'blood-glucose' \| 'body-temperature' \| 'basal-body-temperature' \| 'body-fat' \| 'flights-climbed' \| 'exercise-time' \| 'sleep' \| 'mindfulness' \| 'hrv' \| 'blood-pressure'</code> |
+| **`bucket`**    | <code>string</code>                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 
 #### QueryWorkoutResponse

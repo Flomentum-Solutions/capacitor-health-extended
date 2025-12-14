@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Capacitor
 import HealthKit
 
@@ -17,11 +18,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "openAppleHealthSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryAggregated", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryWorkouts", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "queryLatestSample", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "queryWeight", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "queryHeight", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "queryHeartRate", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "querySteps", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "queryLatestSample", returnType: CAPPluginReturnPromise)
     ]
     
     let healthStore = HKHealthStore()
@@ -153,6 +150,11 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             healthStore.execute(query)
             return
         }
+        // ---- Derived total calories (active + basal) ----
+        if dataTypeString == "total-calories" {
+            queryLatestTotalCalories(call)
+            return
+        }
         // ---- Special handling for sleep sessions (category samples) ----
         if dataTypeString == "sleep" {
             guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
@@ -238,17 +240,15 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 return HKObjectType.quantityType(forIdentifier: .height)
             case "distance":
                 return HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)
-            case "distance-cycling":
-                return HKObjectType.quantityType(forIdentifier: .distanceCycling)
-            case "active-calories":
-                return HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
-            case "total-calories":
-                return HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
-            case "basal-calories":
-                return HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
-            case "blood-pressure":
-                return nil // handled above
-            case "oxygen-saturation":
+        case "distance-cycling":
+            return HKObjectType.quantityType(forIdentifier: .distanceCycling)
+        case "active-calories":
+            return HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)
+        case "basal-calories":
+            return HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
+        case "blood-pressure":
+            return nil // handled above
+        case "oxygen-saturation":
                 return HKObjectType.quantityType(forIdentifier: .oxygenSaturation)
             case "blood-glucose":
                 return HKObjectType.quantityType(forIdentifier: .bloodGlucose)
@@ -337,57 +337,6 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         healthStore.execute(query)
-    }
-    
-    // Convenience methods for specific data types
-    @objc func queryWeight(_ call: CAPPluginCall) {
-        queryLatestSampleWithType(call, dataType: "weight")
-    }
-    
-    @objc func queryHeight(_ call: CAPPluginCall) {
-        queryLatestSampleWithType(call, dataType: "height")
-    }
-    
-    @objc func queryHeartRate(_ call: CAPPluginCall) {
-        queryLatestSampleWithType(call, dataType: "heart-rate")
-    }
-    
-    @objc func querySteps(_ call: CAPPluginCall) {
-        queryLatestSampleWithType(call, dataType: "steps")
-    }
-    
-    private func queryLatestSampleWithType(_ call: CAPPluginCall, dataType: String) {
-        // Safely coerce the original options into a [String: Any] JSObject.
-        let originalOptions = call.options as? [String: Any] ?? [:]
-        var params = originalOptions
-        params["dataType"] = dataType
-
-        // Create a proxy CAPPluginCall using the CURRENT (Capacitor 6) designated initializer.
-        // NOTE: The older init(callbackId:options:success:error:) is deprecated and *failable*,
-        // so we use the newer initializer that requires a method name. Guard against failure.
-        guard let proxyCall = CAPPluginCall(
-            callbackId: call.callbackId,
-            methodName: "queryLatestSample", // required in new API
-            options: params,
-            success: { result, _ in
-                // Forward the resolved data back to the original JS caller.
-                call.resolve(result?.data ?? [:])
-            },
-            error: { capError in
-                // Forward the error to the original call in the legacy reject format.
-                if let capError = capError {
-                    call.reject(capError.message, capError.code, capError.error, capError.data)
-                } else {
-                    call.reject("Unknown native error")
-                }
-            }
-        ) else {
-            call.reject("Failed to create proxy call")
-            return
-        }
-
-        // Delegate the actual HealthKit fetch to the common implementation.
-        queryLatestSample(proxyCall)
     }
     
     @objc func openAppleHealthSettings(_ call: CAPPluginCall) {
@@ -576,15 +525,55 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
               let endDateString = call.getString("endDate"),
               let dataTypeString = call.getString("dataType"),
               let bucket = call.getString("bucket"),
-              let startDate = self.isoDateFormatter.date(from: startDateString),
-              let endDate = self.isoDateFormatter.date(from: endDateString) else {
+              let rawStartDate = self.isoDateFormatter.date(from: startDateString),
+              let rawEndDate = self.isoDateFormatter.date(from: endDateString) else {
             DispatchQueue.main.async {
                 call.reject("Invalid parameters")
             }
             return
         }
+        let calendar = Calendar.current
+        var startDate = rawStartDate
+        var endDate = rawEndDate
+        if bucket == "day" {
+            startDate = calendar.startOfDay(for: rawStartDate)
+            let endDayStart = calendar.startOfDay(for: rawEndDate)
+            endDate = calendar.date(byAdding: .day, to: endDayStart) ?? endDayStart
+        }
         if dataTypeString == "mindfulness" {
             self.queryMindfulnessAggregated(startDate: startDate, endDate: endDate) { result, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        call.reject(error.localizedDescription)
+                    } else if let result = result {
+                        call.resolve(["aggregatedData": result])
+                    }
+                }
+            }
+        } else if dataTypeString == "blood-pressure" {
+            guard bucket == "day" else {
+                DispatchQueue.main.async {
+                    call.reject("Blood pressure aggregation only supports daily buckets")
+                }
+                return
+            }
+            self.queryBloodPressureAggregated(startDate: startDate, endDate: endDate) { result, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        call.reject(error.localizedDescription)
+                    } else if let result = result {
+                        call.resolve(["aggregatedData": result])
+                    }
+                }
+            }
+        } else if dataTypeString == "total-calories" {
+            guard let interval = calculateInterval(bucket: bucket) else {
+                DispatchQueue.main.async {
+                    call.reject("Invalid bucket")
+                }
+                return
+            }
+            self.queryTotalCaloriesAggregated(startDate: startDate, endDate: endDate, interval: interval) { result, error in
                 DispatchQueue.main.async {
                     if let error = error {
                         call.reject(error.localizedDescription)
@@ -761,6 +750,235 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
         healthStore.execute(query)
+    }
+    
+    func queryBloodPressureAggregated(startDate: Date, endDate: Date, completion: @escaping ([[String: Any]]?, Error?) -> Void) {
+        guard let bpType = HKObjectType.correlationType(forIdentifier: .bloodPressure),
+              let systolicType = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic),
+              let diastolicType = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic) else {
+            DispatchQueue.main.async {
+                completion(nil, NSError(domain: "HealthKit", code: -1, userInfo: [NSLocalizedDescriptionKey: "Blood pressure types unavailable"]))
+            }
+            return
+        }
+
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        let query = HKSampleQuery(sampleType: bpType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(nil, error)
+                }
+                return
+            }
+
+            guard let correlations = samples as? [HKCorrelation] else {
+                DispatchQueue.main.async {
+                    completion([], nil)
+                }
+                return
+            }
+
+            let calendar = Calendar.current
+            let dayComponent = DateComponents(day: 1)
+            let unit = HKUnit.millimeterOfMercury()
+
+            var grouped: [Date: [(Double, Double)]] = [:]
+            for correlation in correlations {
+                guard let systolicSample = correlation.objects(for: systolicType).first as? HKQuantitySample,
+                      let diastolicSample = correlation.objects(for: diastolicType).first as? HKQuantitySample else { continue }
+                let dayStart = calendar.startOfDay(for: correlation.startDate)
+                let systolicValue = systolicSample.quantity.doubleValue(for: unit)
+                let diastolicValue = diastolicSample.quantity.doubleValue(for: unit)
+                grouped[dayStart, default: []].append((systolicValue, diastolicValue))
+            }
+
+            var aggregatedSamples: [[String: Any]] = []
+            for (dayStart, readings) in grouped {
+                guard !readings.isEmpty else { continue }
+                let systolicAvg = readings.map { $0.0 }.reduce(0, +) / Double(readings.count)
+                let diastolicAvg = readings.map { $0.1 }.reduce(0, +) / Double(readings.count)
+                let bucketStart = dayStart.timeIntervalSince1970 * 1000
+                let bucketEnd = (calendar.date(byAdding: dayComponent, to: dayStart)?.timeIntervalSince1970 ?? dayStart.timeIntervalSince1970) * 1000
+                aggregatedSamples.append([
+                    "startDate": bucketStart,
+                    "endDate": bucketEnd,
+                    "systolic": systolicAvg,
+                    "diastolic": diastolicAvg,
+                    "value": systolicAvg,
+                    "unit": unit.unitString
+                ])
+            }
+
+            aggregatedSamples.sort { (lhs, rhs) in
+                guard let lhsStart = lhs["startDate"] as? Double, let rhsStart = rhs["startDate"] as? Double else { return false }
+                return lhsStart < rhsStart
+            }
+
+            DispatchQueue.main.async {
+                completion(aggregatedSamples, nil)
+            }
+        }
+        healthStore.execute(query)
+    }
+
+    private func queryLatestTotalCalories(_ call: CAPPluginCall) {
+        let unit = HKUnit.kilocalorie()
+        let group = DispatchGroup()
+
+        var activeValue: Double?
+        var basalValue: Double?
+        var activeDate: Date?
+        var basalDate: Date?
+        var queryError: Error?
+        let basalSupported = HKObjectType.quantityType(forIdentifier: .basalEnergyBurned) != nil
+
+        func fetchLatest(_ identifier: HKQuantityTypeIdentifier, completion: @escaping (Double?, Date?, Error?) -> Void) {
+            guard let type = HKObjectType.quantityType(forIdentifier: identifier) else {
+                completion(nil, nil, NSError(domain: "HealthKit", code: -1, userInfo: [NSLocalizedDescriptionKey: "Quantity type unavailable"]))
+                return
+            }
+            let predicate = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: .strictEndDate)
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [sort]) { _, samples, error in
+                if let error = error {
+                    completion(nil, nil, error)
+                    return
+                }
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    completion(nil, nil, nil)
+                    return
+                }
+                completion(sample.quantity.doubleValue(for: unit), sample.startDate, nil)
+            }
+            healthStore.execute(query)
+        }
+
+        group.enter()
+        fetchLatest(.activeEnergyBurned) { value, date, error in
+            activeValue = value
+            activeDate = date
+            queryError = queryError ?? error
+            group.leave()
+        }
+
+        if basalSupported {
+            group.enter()
+            fetchLatest(.basalEnergyBurned) { value, date, error in
+                basalValue = value
+                basalDate = date
+                queryError = queryError ?? error
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            if let error = queryError {
+                call.reject("Error fetching total calories: \(error.localizedDescription)")
+                return
+            }
+            guard activeValue != nil || basalValue != nil else {
+                call.reject("No sample found", "NO_SAMPLE")
+                return
+            }
+            let total = (activeValue ?? 0) + (basalValue ?? 0)
+            let timestamp = max(activeDate?.timeIntervalSince1970 ?? 0, basalDate?.timeIntervalSince1970 ?? 0) * 1000
+            call.resolve([
+                "value": total,
+                "timestamp": timestamp,
+                "unit": unit.unitString
+            ])
+        }
+    }
+
+    private func collectEnergyBuckets(
+        _ identifier: HKQuantityTypeIdentifier,
+        startDate: Date,
+        endDate: Date,
+        interval: DateComponents,
+        completion: @escaping ([TimeInterval: (start: TimeInterval, end: TimeInterval, value: Double)]?, Error?) -> Void
+    ) {
+        guard let type = HKObjectType.quantityType(forIdentifier: identifier) else {
+            completion([:], nil)
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        let query = HKStatisticsCollectionQuery(
+            quantityType: type,
+            quantitySamplePredicate: predicate,
+            options: .cumulativeSum,
+            anchorDate: startDate,
+            intervalComponents: interval
+        )
+        query.initialResultsHandler = { _, result, error in
+            if let error = error {
+                completion(nil, error)
+                return
+            }
+            var buckets: [TimeInterval: (start: TimeInterval, end: TimeInterval, value: Double)] = [:]
+            result?.enumerateStatistics(from: startDate, to: endDate) { statistics, _ in
+                guard let quantity = statistics.sumQuantity() else { return }
+                let startMs = statistics.startDate.timeIntervalSince1970 * 1000
+                let endMs = statistics.endDate.timeIntervalSince1970 * 1000
+                buckets[startMs] = (startMs, endMs, quantity.doubleValue(for: HKUnit.kilocalorie()))
+            }
+            completion(buckets, nil)
+        }
+        healthStore.execute(query)
+    }
+
+    private func queryTotalCaloriesAggregated(
+        startDate: Date,
+        endDate: Date,
+        interval: DateComponents,
+        completion: @escaping ([[String: Any]]?, Error?) -> Void
+    ) {
+        let group = DispatchGroup()
+        let basalSupported = HKObjectType.quantityType(forIdentifier: .basalEnergyBurned) != nil
+        var activeBuckets: [TimeInterval: (start: TimeInterval, end: TimeInterval, value: Double)]?
+        var basalBuckets: [TimeInterval: (start: TimeInterval, end: TimeInterval, value: Double)]?
+        var queryError: Error?
+
+        group.enter()
+        collectEnergyBuckets(.activeEnergyBurned, startDate: startDate, endDate: endDate, interval: interval) { buckets, error in
+            activeBuckets = buckets
+            queryError = queryError ?? error
+            group.leave()
+        }
+
+        if basalSupported {
+            group.enter()
+            collectEnergyBuckets(.basalEnergyBurned, startDate: startDate, endDate: endDate, interval: interval) { buckets, error in
+                basalBuckets = buckets
+                queryError = queryError ?? error
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            if let error = queryError {
+                completion(nil, error)
+                return
+            }
+            let active = activeBuckets ?? [:]
+            let basal = basalBuckets ?? [:]
+            let allKeys = Set(active.keys).union(basal.keys).sorted()
+            var aggregated: [[String: Any]] = []
+            let calendar = Calendar.current
+            for key in allKeys {
+                let startMs = key
+                let endMs = active[key]?.end ?? basal[key]?.end ?? {
+                    let date = Date(timeIntervalSince1970: startMs / 1000)
+                    return (calendar.date(byAdding: interval, to: date) ?? date).timeIntervalSince1970 * 1000
+                }()
+                let value = (active[key]?.value ?? 0) + (basal[key]?.value ?? 0)
+                aggregated.append([
+                    "startDate": startMs,
+                    "endDate": endMs,
+                    "value": value
+                ])
+            }
+            completion(aggregated.sorted { ($0["startDate"] as? Double ?? 0) < ($1["startDate"] as? Double ?? 0) }, nil)
+        }
     }
 
     private func queryAggregated(for startDate: Date, for endDate: Date, for dataType: HKQuantityType?, completion: @escaping (Double?) -> Void) {

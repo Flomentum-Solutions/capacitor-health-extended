@@ -25,7 +25,7 @@
  *
  */
 
-// package com.[YOUR_ORGANIZATION].[YOUR_APP...]
+// package com.my.app.package.name  // <-- CHANGE THIS TO YOUR APP'S PACKAGE NAME
 
 import android.os.Bundle
 import android.util.Log
