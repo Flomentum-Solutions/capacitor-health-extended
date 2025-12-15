@@ -28,12 +28,14 @@ Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fo
 - Query aggregated data like steps or calories
 - Retrieve workout sessions with optional route and heart rate data
 - Fetch the latest samples for steps, distance (incl. cycling), calories (active/total/basal), heart‑rate, resting HR, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature (basal + core), body fat, height, weight, flights climbed, sleep, and exercise time.
+- Read profile characteristics on iOS: biological sex, blood type, date of birth, Fitzpatrick skin type, wheelchair use.
 
 ### Supported data types (parity iOS + Android)
 - Activity: steps, distance, distance‑cycling, exercise time (Apple Exercise Time), workouts (with routes/steps/calories), flights climbed
 - Energy: active calories, total calories, basal calories
 - Vitals: heart rate, resting heart rate, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature, basal body temperature
 - Body: weight, height, body fat
+- Characteristics (iOS): biological sex, blood type, date of birth, Fitzpatrick skin type, wheelchair use
 - Sessions: mindfulness, sleep
 
 ## Install
@@ -213,6 +215,7 @@ This setup ensures your WebView will load HTTPS content securely and complies wi
 * [`openAppleHealthSettings()`](#openapplehealthsettings)
 * [`openHealthConnectSettings()`](#openhealthconnectsettings)
 * [`showHealthConnectInPlayStore()`](#showhealthconnectinplaystore)
+* [`getCharacteristics()`](#getcharacteristics)
 * [`queryAggregated(...)`](#queryaggregated)
 * [`queryWorkouts(...)`](#queryworkouts)
 * [`queryLatestSample(...)`](#querylatestsample)
@@ -319,6 +322,20 @@ Opens the Google Health Connect app in PlayStore
 --------------------
 
 
+### getCharacteristics()
+
+```typescript
+getCharacteristics() => Promise<CharacteristicsResponse>
+```
+
+iOS only: Reads user characteristics such as biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use.
+Values are null when unavailable or permission was not granted. Android does not expose these characteristics; it returns `platformSupported: false` and a `platformMessage` for UI hints without emitting null values.
+
+**Returns:** <code>Promise&lt;<a href="#characteristicsresponse">CharacteristicsResponse</a>&gt;</code>
+
+--------------------
+
+
 ### queryAggregated(...)
 
 ```typescript
@@ -326,19 +343,18 @@ queryAggregated(request: QueryAggregatedRequest) => Promise<QueryAggregatedRespo
 ```
 
 Query aggregated data
-
-| Param         | Type                                                                      |
-| ------------- | ------------------------------------------------------------------------- |
-| **`request`** | <code><a href="#queryaggregatedrequest">QueryAggregatedRequest</a></code> |
-
-**Returns:** <code>Promise&lt;<a href="#queryaggregatedresponse">QueryAggregatedResponse</a>&gt;</code>
-
 - Blood-pressure aggregates return the systolic average in `value` plus `systolic`, `diastolic`, and `unit`.
 - `total-calories` is derived as active + basal energy on both iOS and Android for latest samples, aggregated queries, and workouts. We fall back to the platform's total‑calories metric (or active calories) when basal data isn't available or permission is missing. Request both `READ_ACTIVE_CALORIES` and `READ_BASAL_CALORIES` for full totals.
 - Weight/height aggregation returns the latest sample per day (no averaging).
 - Android aggregation currently supports daily buckets; unsupported buckets will be rejected.
 - Android `distance-cycling` aggregates distance recorded during biking exercise sessions (requires distance + workouts permissions).
 - Daily `bucket: "day"` queries use calendar-day boundaries in the device time zone (start-of-day through the next start-of-day) instead of a trailing 24-hour window. For “today,” send `startDate` at today’s start-of-day and `endDate` at now or tomorrow’s start-of-day.
+
+| Param         | Type                                                                      |
+| ------------- | ------------------------------------------------------------------------- |
+| **`request`** | <code><a href="#queryaggregatedrequest">QueryAggregatedRequest</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#queryaggregatedresponse">QueryAggregatedResponse</a>&gt;</code>
 
 --------------------
 
@@ -363,18 +379,17 @@ Query workouts
 ### queryLatestSample(...)
 
 ```typescript
-queryLatestSample(request: { dataType: string; }) => Promise<QueryLatestSampleResponse>
+queryLatestSample(request: { dataType: LatestDataType; }) => Promise<QueryLatestSampleResponse>
 ```
 
 Query latest sample for a specific data type
+- Latest sleep sample returns the most recent complete sleep session (asleep states only) from the last ~36 hours; if a longer overnight session exists, shorter naps are ignored.
 
-| Param         | Type                               |
-| ------------- | ---------------------------------- |
-| **`request`** | <code>{ dataType: string; }</code> |
+| Param         | Type                                                                     |
+| ------------- | ------------------------------------------------------------------------ |
+| **`request`** | <code>{ dataType: <a href="#latestdatatype">LatestDataType</a>; }</code> |
 
 **Returns:** <code>Promise&lt;<a href="#querylatestsampleresponse">QueryLatestSampleResponse</a>&gt;</code>
-
-- Latest sleep sample returns the most recent complete sleep session (asleep states only) from the last ~36 hours; if a longer overnight session exists, shorter naps are ignored.
 
 --------------------
 
@@ -436,9 +451,9 @@ Query latest steps sample
 
 #### PermissionResponse
 
-| Prop              | Type                                       |
-| ----------------- | ------------------------------------------ |
-| **`permissions`** | <code>Record<HealthPermission, boolean></code> |
+| Prop              | Type                                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| **`permissions`** | <code><a href="#record">Record</a>&lt;<a href="#healthpermission">HealthPermission</a>, boolean&gt;</code> |
 
 
 #### PermissionsRequest
@@ -446,6 +461,19 @@ Query latest steps sample
 | Prop              | Type                            |
 | ----------------- | ------------------------------- |
 | **`permissions`** | <code>HealthPermission[]</code> |
+
+
+#### CharacteristicsResponse
+
+| Prop                      | Type                                                                                    | Description                                                                                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **`biologicalSex`**       | <code><a href="#healthbiologicalsex">HealthBiologicalSex</a> \| null</code>             |                                                                                                                                         |
+| **`bloodType`**           | <code><a href="#healthbloodtype">HealthBloodType</a> \| null</code>                     |                                                                                                                                         |
+| **`dateOfBirth`**         | <code>string \| null</code>                                                             |                                                                                                                                         |
+| **`fitzpatrickSkinType`** | <code><a href="#healthfitzpatrickskintype">HealthFitzpatrickSkinType</a> \| null</code> |                                                                                                                                         |
+| **`wheelchairUse`**       | <code><a href="#healthwheelchairuse">HealthWheelchairUse</a> \| null</code>             |                                                                                                                                         |
+| **`platformSupported`**   | <code>boolean</code>                                                                    | Indicates whether the platform exposes these characteristics via the plugin (true on iOS, false on Android).                            |
+| **`platformMessage`**     | <code>string</code>                                                                     | Optional platform-specific message; on Android we return a user-facing note explaining that values remain empty unless synced from iOS. |
 
 
 #### QueryAggregatedResponse
@@ -457,14 +485,14 @@ Query latest steps sample
 
 #### AggregatedSample
 
-| Prop              | Type                |
-| ----------------- | ------------------- |
-| **`startDate`**   | <code>string</code> |
-| **`endDate`**     | <code>string</code> |
-| **`value`**       | <code>number</code> |
-| **`systolic`**    | <code>number</code> |
-| **`diastolic`**   | <code>number</code> |
-| **`unit`**        | <code>string</code> |
+| Prop            | Type                |
+| --------------- | ------------------- |
+| **`startDate`** | <code>string</code> |
+| **`endDate`**   | <code>string</code> |
+| **`value`**     | <code>number</code> |
+| **`systolic`**  | <code>number</code> |
+| **`diastolic`** | <code>number</code> |
+| **`unit`**      | <code>string</code> |
 
 
 #### QueryAggregatedRequest
@@ -473,7 +501,7 @@ Query latest steps sample
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`startDate`** | <code>string</code>                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **`endDate`**   | <code>string</code>                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **`dataType`**  | <code>'steps' \| 'active-calories' \| 'total-calories' \| 'basal-calories' \| 'distance' \| 'distance-cycling' \| 'weight' \| 'height' \| 'heart-rate' \| 'resting-heart-rate' \| 'respiratory-rate' \| 'oxygen-saturation' \| 'blood-glucose' \| 'body-temperature' \| 'basal-body-temperature' \| 'body-fat' \| 'flights-climbed' \| 'exercise-time' \| 'sleep' \| 'mindfulness' \| 'hrv' \| 'blood-pressure'</code> |
+| **`dataType`**  | <code>'steps' \| 'active-calories' \| 'total-calories' \| 'basal-calories' \| 'distance' \| 'weight' \| 'height' \| 'heart-rate' \| 'resting-heart-rate' \| 'respiratory-rate' \| 'oxygen-saturation' \| 'blood-glucose' \| 'body-temperature' \| 'basal-body-temperature' \| 'body-fat' \| 'flights-climbed' \| 'exercise-time' \| 'distance-cycling' \| 'mindfulness' \| 'sleep' \| 'hrv' \| 'blood-pressure'</code> |
 | **`bucket`**    | <code>string</code>                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 
@@ -533,20 +561,54 @@ Query latest steps sample
 
 #### QueryLatestSampleResponse
 
-| Prop            | Type                |
-| --------------- | ------------------- |
-| **`value`**     | <code>number</code> |
-| **`systolic`**  | <code>number</code> |
-| **`diastolic`** | <code>number</code> |
-| **`timestamp`** | <code>number</code> |
-| **`unit`**      | <code>string</code> |
+| Prop               | Type                                                             |
+| ------------------ | ---------------------------------------------------------------- |
+| **`value`**        | <code>number</code>                                              |
+| **`systolic`**     | <code>number</code>                                              |
+| **`diastolic`**    | <code>number</code>                                              |
+| **`timestamp`**    | <code>number</code>                                              |
+| **`endTimestamp`** | <code>number</code>                                              |
+| **`unit`**         | <code>string</code>                                              |
+| **`metadata`**     | <code><a href="#record">Record</a>&lt;string, unknown&gt;</code> |
 
 
 ### Type Aliases
 
 
+#### Record
+
+Construct a type with a set of properties K of type T
+
+<code>{ [P in K]: T; }</code>
+
+
 #### HealthPermission
 
-<code>'READ_STEPS' | 'READ_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'READ_DISTANCE' | 'READ_WEIGHT' | 'READ_HEIGHT' | 'READ_HEART_RATE' | 'READ_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE'</code>
+<code>'READ_STEPS' | 'READ_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'READ_DISTANCE' | 'READ_WEIGHT' | 'READ_HEIGHT' | 'READ_HEART_RATE' | 'READ_RESTING_HEART_RATE' | 'READ_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE' | 'READ_BASAL_CALORIES' | 'READ_RESPIRATORY_RATE' | 'READ_OXYGEN_SATURATION' | 'READ_BLOOD_GLUCOSE' | 'READ_BODY_TEMPERATURE' | 'READ_BASAL_BODY_TEMPERATURE' | 'READ_BODY_FAT' | 'READ_FLOORS_CLIMBED' | 'READ_SLEEP' | 'READ_EXERCISE_TIME' | 'READ_BIOLOGICAL_SEX' | 'READ_BLOOD_TYPE' | 'READ_DATE_OF_BIRTH' | 'READ_FITZPATRICK_SKIN_TYPE' | 'READ_WHEELCHAIR_USE'</code>
+
+
+#### HealthBiologicalSex
+
+<code>'female' | 'male' | 'other' | 'not_set' | 'unknown'</code>
+
+
+#### HealthBloodType
+
+<code>'a-positive' | 'a-negative' | 'b-positive' | 'b-negative' | 'ab-positive' | 'ab-negative' | 'o-positive' | 'o-negative' | 'not_set' | 'unknown'</code>
+
+
+#### HealthFitzpatrickSkinType
+
+<code>'type1' | 'type2' | 'type3' | 'type4' | 'type5' | 'type6' | 'not_set' | 'unknown'</code>
+
+
+#### HealthWheelchairUse
+
+<code>'wheelchair_user' | 'not_wheelchair_user' | 'not_set' | 'unknown'</code>
+
+
+#### LatestDataType
+
+<code>'steps' | 'active-calories' | 'total-calories' | 'basal-calories' | 'distance' | 'weight' | 'height' | 'heart-rate' | 'resting-heart-rate' | 'respiratory-rate' | 'oxygen-saturation' | 'blood-glucose' | 'body-temperature' | 'basal-body-temperature' | 'body-fat' | 'flights-climbed' | 'exercise-time' | 'distance-cycling' | 'mindfulness' | 'sleep' | 'hrv' | 'blood-pressure'</code>
 
 </docgen-api>

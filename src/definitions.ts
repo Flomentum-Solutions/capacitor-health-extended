@@ -45,7 +45,19 @@ export interface HealthPlugin {
   showHealthConnectInPlayStore(): Promise<void>;
 
   /**
+   * iOS only: Reads user characteristics such as biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use.
+   * Values are null when unavailable or permission was not granted. Android does not expose these characteristics; it returns `platformSupported: false` and a `platformMessage` for UI hints without emitting null values.
+   */
+  getCharacteristics(): Promise<CharacteristicsResponse>;
+
+  /**
    * Query aggregated data
+   * - Blood-pressure aggregates return the systolic average in `value` plus `systolic`, `diastolic`, and `unit`.
+   * - `total-calories` is derived as active + basal energy on both iOS and Android for latest samples, aggregated queries, and workouts. We fall back to the platform's total‑calories metric (or active calories) when basal data isn't available or permission is missing. Request both `READ_ACTIVE_CALORIES` and `READ_BASAL_CALORIES` for full totals.
+   * - Weight/height aggregation returns the latest sample per day (no averaging).
+   * - Android aggregation currently supports daily buckets; unsupported buckets will be rejected.
+   * - Android `distance-cycling` aggregates distance recorded during biking exercise sessions (requires distance + workouts permissions).
+   * - Daily `bucket: "day"` queries use calendar-day boundaries in the device time zone (start-of-day through the next start-of-day) instead of a trailing 24-hour window. For “today,” send `startDate` at today’s start-of-day and `endDate` at now or tomorrow’s start-of-day.
    * @param request
    */
   queryAggregated(request: QueryAggregatedRequest): Promise<QueryAggregatedResponse>;
@@ -58,6 +70,7 @@ export interface HealthPlugin {
 
   /**
    * Query latest sample for a specific data type
+   * - Latest sleep sample returns the most recent complete sleep session (asleep states only) from the last ~36 hours; if a longer overnight session exists, shorter naps are ignored.
    * @param request
    */
   queryLatestSample(request: { dataType: LatestDataType }): Promise<QueryLatestSampleResponse>;
@@ -106,7 +119,12 @@ export declare type HealthPermission =
   | 'READ_BODY_FAT'
   | 'READ_FLOORS_CLIMBED'
   | 'READ_SLEEP'
-  | 'READ_EXERCISE_TIME';
+  | 'READ_EXERCISE_TIME'
+  | 'READ_BIOLOGICAL_SEX'
+  | 'READ_BLOOD_TYPE'
+  | 'READ_DATE_OF_BIRTH'
+  | 'READ_FITZPATRICK_SKIN_TYPE'
+  | 'READ_WHEELCHAIR_USE';
 
 export type LatestDataType =
   | 'steps'
@@ -230,3 +248,37 @@ export interface QueryLatestSampleResponse {
   unit: string;
   metadata?: Record<string, unknown>;
 }
+
+export interface CharacteristicsResponse {
+  biologicalSex?: HealthBiologicalSex | null;
+  bloodType?: HealthBloodType | null;
+  dateOfBirth?: string | null;
+  fitzpatrickSkinType?: HealthFitzpatrickSkinType | null;
+  wheelchairUse?: HealthWheelchairUse | null;
+  /**
+   * Indicates whether the platform exposes these characteristics via the plugin (true on iOS, false on Android).
+   */
+  platformSupported?: boolean;
+  /**
+   * Optional platform-specific message; on Android we return a user-facing note explaining that values remain empty unless synced from iOS.
+   */
+  platformMessage?: string;
+}
+
+export type HealthBiologicalSex = 'female' | 'male' | 'other' | 'not_set' | 'unknown';
+
+export type HealthBloodType =
+  | 'a-positive'
+  | 'a-negative'
+  | 'b-positive'
+  | 'b-negative'
+  | 'ab-positive'
+  | 'ab-negative'
+  | 'o-positive'
+  | 'o-negative'
+  | 'not_set'
+  | 'unknown';
+
+export type HealthFitzpatrickSkinType = 'type1' | 'type2' | 'type3' | 'type4' | 'type5' | 'type6' | 'not_set' | 'unknown';
+
+export type HealthWheelchairUse = 'wheelchair_user' | 'not_wheelchair_user' | 'not_set' | 'unknown';

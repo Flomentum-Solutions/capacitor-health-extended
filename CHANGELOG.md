@@ -5,7 +5,11 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
-## [0.4.5] – Unreleased  
+## [0.5.0] – 2025-12-15
+### Added
+- New `getCharacteristics()` API on iOS to read biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use, plus new characteristic permission constants and TypeScript enums.
+- Android scaffolding for characteristics now returns `platformSupported: false` alongside a user-facing `platformMessage` instead of null data, so UIs can show the empty-state note for Android-only users while still accepting data synced from iOS.
+
 ### Fixed
 - SwiftPM/Xcode builds now declare the Cordova binary target alongside Capacitor so the module resolves correctly.
 - iOS latest sleep query now gates new sleep stages to iOS 16+ and falls back to the legacy `asleep` value on earlier OS versions, avoiding missing symbol errors.
@@ -16,7 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
-## [0.4.4] – 2025-12-15  
+## [0.4.4] – 2025-12-14
 ### Fixed
 - `total-calories` now correctly derives active + basal energy on both iOS and Android for latest samples, aggregated queries, and workouts; falls back to the platform total or active calories when basal data/permission is unavailable.
 - Latest sleep sample on iOS now returns the most recent complete sleep session (asleep states only) within the last 36 hours and ignores in-bed/awake noise to avoid inflated durations.

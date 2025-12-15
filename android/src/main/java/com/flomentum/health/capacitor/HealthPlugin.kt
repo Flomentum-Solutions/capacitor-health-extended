@@ -313,6 +313,17 @@ class HealthPlugin : Plugin() {
         call.resolve()
     }
 
+    @PluginMethod
+    fun getCharacteristics(call: PluginCall) {
+        val result = JSObject()
+        result.put("platformSupported", false)
+        result.put(
+            "platformMessage",
+            "Health Connect does not expose characteristics; this section stays empty unless synced from an iOS device."
+        )
+        call.resolve(result)
+    }
+
     private fun getMetricAndMapper(dataType: String): MetricAndMapper {
         return when (dataType) {
             "steps" -> metricAndMapper("steps", CapHealthPermission.READ_STEPS, StepsRecord.COUNT_TOTAL) { it?.toDouble() }

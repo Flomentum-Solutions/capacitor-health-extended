@@ -18,7 +18,8 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "openAppleHealthSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryAggregated", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryWorkouts", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "queryLatestSample", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "queryLatestSample", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getCharacteristics", returnType: CAPPluginReturnPromise)
     ]
     
     let healthStore = HKHealthStore()
@@ -94,6 +95,47 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve(["permissions": result])
             }
         }
+    }
+
+    @objc func getCharacteristics(_ call: CAPPluginCall) {
+        var result: [String: Any] = [:]
+
+        func setValue(_ key: String, _ value: String?) {
+            result[key] = value ?? NSNull()
+        }
+
+        if let biologicalSexObject = try? healthStore.biologicalSex() {
+            setValue("biologicalSex", mapBiologicalSex(biologicalSexObject.biologicalSex))
+        } else {
+            setValue("biologicalSex", nil)
+        }
+
+        if let bloodTypeObject = try? healthStore.bloodType() {
+            setValue("bloodType", mapBloodType(bloodTypeObject.bloodType))
+        } else {
+            setValue("bloodType", nil)
+        }
+
+        if let dateComponents = try? healthStore.dateOfBirthComponents() {
+            setValue("dateOfBirth", isoBirthDateString(from: dateComponents))
+        } else {
+            setValue("dateOfBirth", nil)
+        }
+
+        if let fitzpatrickObject = try? healthStore.fitzpatrickSkinType() {
+            setValue("fitzpatrickSkinType", mapFitzpatrickSkinType(fitzpatrickObject.skinType))
+        } else {
+            setValue("fitzpatrickSkinType", nil)
+        }
+
+        if let wheelchairUseObject = try? healthStore.wheelchairUse() {
+            setValue("wheelchairUse", mapWheelchairUse(wheelchairUseObject.wheelchairUse))
+        } else {
+            setValue("wheelchairUse", nil)
+        }
+
+        result["platformSupported"] = true
+        call.resolve(result)
     }
 
     @objc func queryLatestSample(_ call: CAPPluginCall) {
@@ -473,6 +515,16 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return [HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!].compactMap { $0 }
         case "READ_EXERCISE_TIME":
             return [HKObjectType.quantityType(forIdentifier: .appleExerciseTime)].compactMap { $0 }
+        case "READ_BIOLOGICAL_SEX":
+            return [HKObjectType.characteristicType(forIdentifier: .biologicalSex)].compactMap { $0 }
+        case "READ_BLOOD_TYPE":
+            return [HKObjectType.characteristicType(forIdentifier: .bloodType)].compactMap { $0 }
+        case "READ_DATE_OF_BIRTH":
+            return [HKObjectType.characteristicType(forIdentifier: .dateOfBirth)].compactMap { $0 }
+        case "READ_FITZPATRICK_SKIN_TYPE":
+            return [HKObjectType.characteristicType(forIdentifier: .fitzpatrickSkinType)].compactMap { $0 }
+        case "READ_WHEELCHAIR_USE":
+            return [HKObjectType.characteristicType(forIdentifier: .wheelchairUse)].compactMap { $0 }
         // Add common alternative permission names
         case "steps":
             return [HKObjectType.quantityType(forIdentifier: .stepCount)].compactMap{$0}
@@ -533,6 +585,94 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             print("⚡️ [HealthPlugin] Unknown permission: \(permission)")
             return []
         }
+    }
+
+    private func mapBiologicalSex(_ biologicalSex: HKBiologicalSex) -> String {
+        switch biologicalSex {
+        case .female:
+            return "female"
+        case .male:
+            return "male"
+        case .other:
+            return "other"
+        case .notSet:
+            return "not_set"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func mapBloodType(_ bloodType: HKBloodType) -> String {
+        switch bloodType {
+        case .aPositive:
+            return "a-positive"
+        case .aNegative:
+            return "a-negative"
+        case .bPositive:
+            return "b-positive"
+        case .bNegative:
+            return "b-negative"
+        case .abPositive:
+            return "ab-positive"
+        case .abNegative:
+            return "ab-negative"
+        case .oPositive:
+            return "o-positive"
+        case .oNegative:
+            return "o-negative"
+        case .notSet:
+            return "not_set"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func mapFitzpatrickSkinType(_ skinType: HKFitzpatrickSkinType) -> String {
+        switch skinType {
+        case .typeI:
+            return "type1"
+        case .typeII:
+            return "type2"
+        case .typeIII:
+            return "type3"
+        case .typeIV:
+            return "type4"
+        case .typeV:
+            return "type5"
+        case .typeVI:
+            return "type6"
+        case .notSet:
+            return "not_set"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func mapWheelchairUse(_ wheelchairUse: HKWheelchairUse) -> String {
+        switch wheelchairUse {
+        case .wheelchairUser:
+            return "wheelchair_user"
+        case .notWheelchairUser:
+            return "not_wheelchair_user"
+        case .notSet:
+            return "not_set"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func isoBirthDateString(from components: DateComponents) -> String? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? TimeZone.current
+        guard let date = calendar.date(from: components) else {
+            return nil
+        }
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
     
     func aggregateTypeToHKQuantityType(_ dataType: String) -> HKQuantityType? {
