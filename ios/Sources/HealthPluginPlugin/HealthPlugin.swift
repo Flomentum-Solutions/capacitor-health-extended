@@ -80,62 +80,122 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        healthStore.requestAuthorization(toShare: nil, read: Set(types)) { success, error in
-            if success {
-                //we don't know which actual permissions were granted, so we assume all
-                var result: [String: Bool] = [:]
-                permissions.forEach{ result[$0] = true }
-                call.resolve(["permissions": result])
-            } else if let error = error {
-                call.reject("Authorization failed: \(error.localizedDescription)")
-            } else {
-                //assume no permissions were granted. We can ask user to adjust them manually
-                var result: [String: Bool] = [:]
-                permissions.forEach{ result[$0] = false }
-                call.resolve(["permissions": result])
+        DispatchQueue.main.async {
+            self.healthStore.requestAuthorization(toShare: nil, read: Set(types)) { success, error in
+                DispatchQueue.main.async {
+                    if success {
+                        //we don't know which actual permissions were granted, so we assume all
+                        var result: [String: Bool] = [:]
+                        permissions.forEach{ result[$0] = true }
+                        call.resolve(["permissions": result])
+                    } else if let error = error {
+                        call.reject("Authorization failed: \(error.localizedDescription)")
+                    } else {
+                        //assume no permissions were granted. We can ask user to adjust them manually
+                        var result: [String: Bool] = [:]
+                        permissions.forEach{ result[$0] = false }
+                        call.resolve(["permissions": result])
+                    }
+                }
             }
         }
     }
 
     @objc func getCharacteristics(_ call: CAPPluginCall) {
-        var result: [String: Any] = [:]
-
-        func setValue(_ key: String, _ value: String?) {
-            result[key] = value ?? NSNull()
+        guard HKHealthStore.isHealthDataAvailable() else {
+            call.resolve([
+                "platformSupported": false,
+                "platformMessage": "Health data is unavailable on this device."
+            ])
+            return
         }
 
-        if let biologicalSexObject = try? healthStore.biologicalSex() {
-            setValue("biologicalSex", mapBiologicalSex(biologicalSexObject.biologicalSex))
-        } else {
-            setValue("biologicalSex", nil)
+        let characteristicTypes: [HKObjectType] = [
+            HKObjectType.characteristicType(forIdentifier: .biologicalSex),
+            HKObjectType.characteristicType(forIdentifier: .bloodType),
+            HKObjectType.characteristicType(forIdentifier: .dateOfBirth),
+            HKObjectType.characteristicType(forIdentifier: .fitzpatrickSkinType),
+            HKObjectType.characteristicType(forIdentifier: .wheelchairUse)
+        ].compactMap { $0 }
+
+        guard !characteristicTypes.isEmpty else {
+            call.reject("HealthKit characteristics are unavailable on this device.")
+            return
         }
 
-        if let bloodTypeObject = try? healthStore.bloodType() {
-            setValue("bloodType", mapBloodType(bloodTypeObject.bloodType))
-        } else {
-            setValue("bloodType", nil)
+        func resolveCharacteristics() {
+            var result: [String: Any] = [:]
+
+            func setValue(_ key: String, _ value: String?) {
+                result[key] = value ?? NSNull()
+            }
+
+            if let biologicalSexObject = try? healthStore.biologicalSex() {
+                setValue("biologicalSex", mapBiologicalSex(biologicalSexObject.biologicalSex))
+            } else {
+                setValue("biologicalSex", nil)
+            }
+
+            if let bloodTypeObject = try? healthStore.bloodType() {
+                setValue("bloodType", mapBloodType(bloodTypeObject.bloodType))
+            } else {
+                setValue("bloodType", nil)
+            }
+
+            if let dateComponents = try? healthStore.dateOfBirthComponents() {
+                setValue("dateOfBirth", isoBirthDateString(from: dateComponents))
+            } else {
+                setValue("dateOfBirth", nil)
+            }
+
+            if let fitzpatrickObject = try? healthStore.fitzpatrickSkinType() {
+                setValue("fitzpatrickSkinType", mapFitzpatrickSkinType(fitzpatrickObject.skinType))
+            } else {
+                setValue("fitzpatrickSkinType", nil)
+            }
+
+            if let wheelchairUseObject = try? healthStore.wheelchairUse() {
+                setValue("wheelchairUse", mapWheelchairUse(wheelchairUseObject.wheelchairUse))
+            } else {
+                setValue("wheelchairUse", nil)
+            }
+
+            result["platformSupported"] = true
+            call.resolve(result)
         }
 
-        if let dateComponents = try? healthStore.dateOfBirthComponents() {
-            setValue("dateOfBirth", isoBirthDateString(from: dateComponents))
-        } else {
-            setValue("dateOfBirth", nil)
+        func requestCharacteristicsAccess() {
+            self.healthStore.requestAuthorization(toShare: nil, read: Set(characteristicTypes)) { success, error in
+                DispatchQueue.main.async {
+                    if success {
+                        resolveCharacteristics()
+                    } else if let error = error {
+                        call.reject("Authorization failed: \(error.localizedDescription)")
+                    } else {
+                        call.resolve([
+                            "platformSupported": true,
+                            "platformMessage": "Characteristics access was not granted. Update permissions in the Health app."
+                        ])
+                    }
+                }
+            }
         }
 
-        if let fitzpatrickObject = try? healthStore.fitzpatrickSkinType() {
-            setValue("fitzpatrickSkinType", mapFitzpatrickSkinType(fitzpatrickObject.skinType))
-        } else {
-            setValue("fitzpatrickSkinType", nil)
-        }
+        healthStore.getRequestStatusForAuthorization(toShare: nil, read: Set(characteristicTypes)) { status, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    call.reject("Failed to determine HealthKit authorization status: \(error.localizedDescription)")
+                    return
+                }
 
-        if let wheelchairUseObject = try? healthStore.wheelchairUse() {
-            setValue("wheelchairUse", mapWheelchairUse(wheelchairUseObject.wheelchairUse))
-        } else {
-            setValue("wheelchairUse", nil)
+                switch status {
+                case .shouldRequest, .unknown:
+                    requestCharacteristicsAccess()
+                default:
+                    resolveCharacteristics()
+                }
+            }
         }
-
-        result["platformSupported"] = true
-        call.resolve(result)
     }
 
     @objc func queryLatestSample(_ call: CAPPluginCall) {

@@ -5,6 +5,16 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.6.2] – 2025-12-15
+### Fixed
+- iOS now requests HealthKit characteristic permissions on the main thread so the authorization sheet appears reliably.
+- `getCharacteristics()` proactively requests characteristic access and returns a platform message when not granted instead of an empty unsupported notice.
+
+### Security
+- None
+
+---
+
 ## [0.6.0] – 2025-12-15
 ### Added
 - New `getCharacteristics()` API on iOS to read biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use, plus new characteristic permission constants and TypeScript enums.
