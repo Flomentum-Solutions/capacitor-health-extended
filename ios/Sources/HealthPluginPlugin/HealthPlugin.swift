@@ -181,7 +181,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
-        healthStore.getRequestStatusForAuthorization(toShare: nil, read: Set(characteristicTypes)) { status, error in
+        healthStore.getRequestStatusForAuthorization(toShare: Set<HKSampleType>(), read: Set(characteristicTypes)) { status, error in
             DispatchQueue.main.async {
                 if let error = error {
                     call.reject("Failed to determine HealthKit authorization status: \(error.localizedDescription)")
