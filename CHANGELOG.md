@@ -5,7 +5,7 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
-## [0.5.0] – 2025-12-15
+## [0.6.0] – 2025-12-15
 ### Added
 - New `getCharacteristics()` API on iOS to read biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use, plus new characteristic permission constants and TypeScript enums.
 - Android scaffolding for characteristics now returns `platformSupported: false` alongside a user-facing `platformMessage` instead of null data, so UIs can show the empty-state note for Android-only users while still accepting data synced from iOS.
