@@ -629,17 +629,17 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func mapFitzpatrickSkinType(_ skinType: HKFitzpatrickSkinType) -> String {
         switch skinType {
-        case .typeI:
+        case .I:
             return "type1"
-        case .typeII:
+        case .II:
             return "type2"
-        case .typeIII:
+        case .III:
             return "type3"
-        case .typeIV:
+        case .IV:
             return "type4"
-        case .typeV:
+        case .V:
             return "type5"
-        case .typeVI:
+        case .VI:
             return "type6"
         case .notSet:
             return "not_set"
@@ -650,9 +650,9 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func mapWheelchairUse(_ wheelchairUse: HKWheelchairUse) -> String {
         switch wheelchairUse {
-        case .wheelchairUser:
+        case .yes:
             return "wheelchair_user"
-        case .notWheelchairUser:
+        case .no:
             return "not_wheelchair_user"
         case .notSet:
             return "not_set"
