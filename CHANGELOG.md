@@ -5,6 +5,15 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.6.3] – 2025-12-15
+### Fixed
+- iOS now requests HealthKit characteristic permissions and fallsback gracefully
+
+### Security
+- None
+
+---
+
 ## [0.6.2] – 2025-12-15
 ### Fixed
 - iOS now requests HealthKit characteristic permissions on the main thread so the authorization sheet appears reliably.
