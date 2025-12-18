@@ -405,6 +405,7 @@ class HealthPlugin : Plugin() {
                     "exercise-time" -> readLatestExerciseTime()
                     "mindfulness" -> readLatestMindfulness()
                     "sleep" -> readLatestSleep()
+                    "sleep-rem" -> readLatestSleepRem()
                     else -> throw IllegalArgumentException("Unsupported data type: $dataType")
                 }
                 call.resolve(result)
@@ -812,6 +813,32 @@ class HealthPlugin : Plugin() {
             put("endTimestamp", (record?.endTime?.epochSecond ?: 0) * 1000)
             put("unit", "min")
             put("metadata", metadata)
+        }
+    }
+
+    private suspend fun readLatestSleepRem(): JSObject {
+        val hasSleepPermission = hasPermission(CapHealthPermission.READ_SLEEP)
+        if (!hasSleepPermission) {
+            throw Exception("Permission for sleep not granted")
+        }
+        val request = ReadRecordsRequest(
+            recordType = SleepSessionRecord::class,
+            timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+            pageSize = 1
+        )
+        val record = healthConnectClient.readRecords(request).records.firstOrNull()
+            ?: throw Exception("No sleep data found")
+        val remMinutes = record.stages
+            .filter { it.stage == SleepSessionRecord.STAGE_TYPE_REM }
+            .sumOf { it.endTime.epochSecond - it.startTime.epochSecond } / 60.0
+        if (remMinutes <= 0) {
+            throw Exception("No REM sleep data found")
+        }
+        return JSObject().apply {
+            put("value", remMinutes)
+            put("timestamp", record.startTime.epochSecond * 1000)
+            put("endTimestamp", record.endTime.epochSecond * 1000)
+            put("unit", "min")
         }
     }
 

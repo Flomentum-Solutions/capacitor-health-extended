@@ -349,6 +349,113 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             healthStore.execute(query)
             return
         }
+        // ---- Special handling for REM sleep sessions (category samples) ----
+        if dataTypeString == "sleep-rem" {
+            guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+                call.reject("Sleep type not available")
+                return
+            }
+
+            let endDate = Date()
+            let startDate = Calendar.current.date(byAdding: .hour, value: -36, to: endDate) ?? endDate.addingTimeInterval(-36 * 3600)
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictEndDate)
+
+            let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error = error {
+                    call.reject("Error fetching latest REM sleep sample", "NO_SAMPLE", error)
+                    return
+                }
+                guard let categorySamples = samples as? [HKCategorySample], !categorySamples.isEmpty else {
+                    call.reject("No REM sleep sample found", "NO_SAMPLE")
+                    return
+                }
+
+                let asleepValues: Set<Int> = {
+                    if #available(iOS 16.0, *) {
+                        return Set([
+                            HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+                            HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                            HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                            HKCategoryValueSleepAnalysis.asleepREM.rawValue
+                        ])
+                    } else {
+                        return Set([HKCategoryValueSleepAnalysis.asleep.rawValue])
+                    }
+                }()
+
+                let remValue: Int? = {
+                    if #available(iOS 16.0, *) {
+                        return HKCategoryValueSleepAnalysis.asleepREM.rawValue
+                    }
+                    return nil
+                }()
+
+                func isAsleep(_ value: Int) -> Bool {
+                    if asleepValues.contains(value) {
+                        return true
+                    }
+                    return value != HKCategoryValueSleepAnalysis.inBed.rawValue &&
+                        value != HKCategoryValueSleepAnalysis.awake.rawValue
+                }
+
+                let asleepSamples = categorySamples
+                    .filter { isAsleep($0.value) }
+                    .sorted { $0.startDate < $1.startDate }
+
+                guard !asleepSamples.isEmpty else {
+                    call.reject("No REM sleep sample found", "NO_SAMPLE")
+                    return
+                }
+
+                let maxGap: TimeInterval = 90 * 60 // 90 minutes separates sessions
+                var sessions: [(start: Date, end: Date, duration: TimeInterval, remDuration: TimeInterval)] = []
+                var currentStart: Date?
+                var currentEnd: Date?
+                var currentDuration: TimeInterval = 0
+                var currentRemDuration: TimeInterval = 0
+
+                for sample in asleepSamples {
+                    if let lastEnd = currentEnd, sample.startDate.timeIntervalSince(lastEnd) > maxGap {
+                        sessions.append((start: currentStart ?? lastEnd, end: lastEnd, duration: currentDuration, remDuration: currentRemDuration))
+                        currentStart = nil
+                        currentEnd = nil
+                        currentDuration = 0
+                        currentRemDuration = 0
+                    }
+                    if currentStart == nil { currentStart = sample.startDate }
+                    currentEnd = sample.endDate
+                    let sampleDuration = sample.endDate.timeIntervalSince(sample.startDate)
+                    currentDuration += sampleDuration
+                    if let remValue = remValue, sample.value == remValue {
+                        currentRemDuration += sampleDuration
+                    }
+                }
+                if let start = currentStart, let end = currentEnd {
+                    sessions.append((start: start, end: end, duration: currentDuration, remDuration: currentRemDuration))
+                }
+
+                guard !sessions.isEmpty else {
+                    call.reject("No REM sleep sample found", "NO_SAMPLE")
+                    return
+                }
+
+                let minSessionDuration: TimeInterval = 3 * 3600 // prefer sessions 3h+
+                let preferredSession = sessions.reversed().first { $0.duration >= minSessionDuration } ?? sessions.last!
+                if preferredSession.remDuration <= 0 {
+                    call.reject("No REM sleep sample found", "NO_SAMPLE")
+                    return
+                }
+
+                call.resolve([
+                    "value": preferredSession.remDuration / 60,
+                    "timestamp": preferredSession.start.timeIntervalSince1970 * 1000,
+                    "endTimestamp": preferredSession.end.timeIntervalSince1970 * 1000,
+                    "unit": "min"
+                ])
+            }
+            healthStore.execute(query)
+            return
+        }
         // ---- Special handling for mindfulness sessions (category samples) ----
         if dataTypeString == "mindfulness" {
             guard let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession) else {
