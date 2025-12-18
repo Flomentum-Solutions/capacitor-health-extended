@@ -71,6 +71,7 @@ export interface HealthPlugin {
   /**
    * Query latest sample for a specific data type
    * - Latest sleep sample returns the most recent complete sleep session (asleep states only) from the last ~36 hours; if a longer overnight session exists, shorter naps are ignored.
+   * - `sleep-rem` returns REM duration (minutes) for the latest sleep session; requires iOS 16+ sleep stages and Health Connect REM data on Android.
    * @param request
    */
   queryLatestSample(request: { dataType: LatestDataType }): Promise<QueryLatestSampleResponse>;
@@ -147,6 +148,7 @@ export type LatestDataType =
   | 'distance-cycling'
   | 'mindfulness'
   | 'sleep'
+  | 'sleep-rem'
   | 'hrv'
   | 'blood-pressure';
 

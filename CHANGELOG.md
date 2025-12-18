@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.6.4] – 2025-12-17
+### Added
+- `sleep-rem` latest-sample data type to return REM duration minutes for the most recent sleep session (iOS 16+ sleep stages; Android Health Connect REM stages).
+
+### Fixed
+- None
+
+### Security
+- None
+
+---
+
 ## [0.6.3] – 2025-12-15
 ### Fixed
 - iOS now requests HealthKit characteristic permissions and fallsback gracefully

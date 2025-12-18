@@ -27,7 +27,7 @@ Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fo
 - Request and verify health permissions
 - Query aggregated data like steps or calories
 - Retrieve workout sessions with optional route and heart rate data
-- Fetch the latest samples for steps, distance (incl. cycling), calories (active/total/basal), heart‑rate, resting HR, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature (basal + core), body fat, height, weight, flights climbed, sleep, and exercise time.
+- Fetch the latest samples for steps, distance (incl. cycling), calories (active/total/basal), heart‑rate, resting HR, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature (basal + core), body fat, height, weight, flights climbed, sleep (incl. REM duration), and exercise time.
 - Read profile characteristics on iOS: biological sex, blood type, date of birth, Fitzpatrick skin type, wheelchair use.
 
 ### Supported data types (parity iOS + Android)
@@ -36,7 +36,7 @@ Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fo
 - Vitals: heart rate, resting heart rate, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature, basal body temperature
 - Body: weight, height, body fat
 - Characteristics (iOS): biological sex, blood type, date of birth, Fitzpatrick skin type, wheelchair use
-- Sessions: mindfulness, sleep
+- Sessions: mindfulness, sleep, sleep REM (latest sample only)
 
 ## Install
 
@@ -384,6 +384,7 @@ queryLatestSample(request: { dataType: LatestDataType; }) => Promise<QueryLatest
 
 Query latest sample for a specific data type
 - Latest sleep sample returns the most recent complete sleep session (asleep states only) from the last ~36 hours; if a longer overnight session exists, shorter naps are ignored.
+- `sleep-rem` returns REM duration (minutes) for the latest sleep session; requires iOS 16+ sleep stages and Health Connect REM data on Android.
 
 | Param         | Type                                                                     |
 | ------------- | ------------------------------------------------------------------------ |
@@ -609,6 +610,6 @@ Construct a type with a set of properties K of type T
 
 #### LatestDataType
 
-<code>'steps' | 'active-calories' | 'total-calories' | 'basal-calories' | 'distance' | 'weight' | 'height' | 'heart-rate' | 'resting-heart-rate' | 'respiratory-rate' | 'oxygen-saturation' | 'blood-glucose' | 'body-temperature' | 'basal-body-temperature' | 'body-fat' | 'flights-climbed' | 'exercise-time' | 'distance-cycling' | 'mindfulness' | 'sleep' | 'hrv' | 'blood-pressure'</code>
+<code>'steps' | 'active-calories' | 'total-calories' | 'basal-calories' | 'distance' | 'weight' | 'height' | 'heart-rate' | 'resting-heart-rate' | 'respiratory-rate' | 'oxygen-saturation' | 'blood-glucose' | 'body-temperature' | 'basal-body-temperature' | 'body-fat' | 'flights-climbed' | 'exercise-time' | 'distance-cycling' | 'mindfulness' | 'sleep' | 'sleep-rem' | 'hrv' | 'blood-pressure'</code>
 
 </docgen-api>
