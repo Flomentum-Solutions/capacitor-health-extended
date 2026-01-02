@@ -27,6 +27,7 @@ Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fo
 - Request and verify health permissions
 - Query aggregated data like steps or calories
 - Retrieve workout sessions with optional route and heart rate data
+- Create workout sessions (e.g., rock climbing) with totals, optional routes, and heart-rate samples (write APIs)
 - Fetch the latest samples for steps, distance (incl. cycling), calories (active/total/basal), heart‑rate, resting HR, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature (basal + core), body fat, height, weight, flights climbed, sleep (incl. REM duration), and exercise time.
 - Read profile characteristics on iOS: biological sex, blood type, date of birth, Fitzpatrick skin type, wheelchair use.
 
@@ -57,6 +58,7 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
 * Make sure your app id has the 'HealthKit' entitlement when this plugin is installed (see iOS dev center).
 * Also, make sure your app and App Store description comply with the Apple review guidelines.
 * There are two keys to be added to the info.plist file: NSHealthShareUsageDescription and NSHealthUpdateUsageDescription.
+* Request WRITE_* permissions with `requestHealthPermissions` to enable saving workouts/energy/distance/routes/heart-rate samples to HealthKit.
 
 ### Android
 
@@ -90,7 +92,15 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
     <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
     <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE_ROUTE" />
 ```
+
+Include the WRITE_* entries when you call `saveWorkout` to insert exercise sessions, energy, distance, routes, or heart rate samples.
 
 * Android Manifest in application tag
 ```xml
@@ -223,6 +233,7 @@ This setup ensures your WebView will load HTTPS content securely and complies wi
 * [`queryHeight()`](#queryheight)
 * [`queryHeartRate()`](#queryheartrate)
 * [`querySteps()`](#querysteps)
+* [`saveWorkout(...)`](#saveworkout)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 
@@ -447,6 +458,26 @@ Query latest steps sample
 --------------------
 
 
+### saveWorkout(...)
+
+```typescript
+saveWorkout(request: SaveWorkoutRequest) => Promise<SaveWorkoutResponse>
+```
+
+Create a workout session with optional totals and route/heart-rate samples.
+- iOS stores an `HKWorkout` (activityType mapped from `activityType`) with total energy/distance and optional metadata/route/heart-rate samples.
+- Android stores an `ExerciseSessionRecord` plus `ActiveCaloriesBurnedRecord`, `DistanceRecord`, and `HeartRateRecord` when provided. Routes are attached via `ExerciseRoute`.
+- Requires matching WRITE_* permissions for the values you include (e.g., WRITE_WORKOUTS + WRITE_ACTIVE_CALORIES + WRITE_DISTANCE + WRITE_HEART_RATE + WRITE_ROUTE).
+
+| Param         | Type                                                              |
+| ------------- | ----------------------------------------------------------------- |
+| **`request`** | <code><a href="#saveworkoutrequest">SaveWorkoutRequest</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#saveworkoutresponse">SaveWorkoutResponse</a>&gt;</code>
+
+--------------------
+
+
 ### Interfaces
 
 
@@ -573,6 +604,28 @@ Query latest steps sample
 | **`metadata`**     | <code><a href="#record">Record</a>&lt;string, unknown&gt;</code> |
 
 
+#### SaveWorkoutResponse
+
+| Prop          | Type                 |
+| ------------- | -------------------- |
+| **`success`** | <code>boolean</code> |
+| **`id`**      | <code>string</code>  |
+
+
+#### SaveWorkoutRequest
+
+| Prop                   | Type                                                                |
+| ---------------------- | ------------------------------------------------------------------- |
+| **`activityType`**     | <code><a href="#workoutactivitytype">WorkoutActivityType</a></code> |
+| **`startDate`**        | <code>string</code>                                                 |
+| **`endDate`**          | <code>string</code>                                                 |
+| **`calories`**         | <code>number</code>                                                 |
+| **`distance`**         | <code>number</code>                                                 |
+| **`metadata`**         | <code><a href="#record">Record</a>&lt;string, any&gt;</code>        |
+| **`route`**            | <code>RouteSample[]</code>                                          |
+| **`heartRateSamples`** | <code>HeartRateSample[]</code>                                      |
+
+
 ### Type Aliases
 
 
@@ -585,7 +638,7 @@ Construct a type with a set of properties K of type T
 
 #### HealthPermission
 
-<code>'READ_STEPS' | 'READ_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'READ_DISTANCE' | 'READ_WEIGHT' | 'READ_HEIGHT' | 'READ_HEART_RATE' | 'READ_RESTING_HEART_RATE' | 'READ_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE' | 'READ_BASAL_CALORIES' | 'READ_RESPIRATORY_RATE' | 'READ_OXYGEN_SATURATION' | 'READ_BLOOD_GLUCOSE' | 'READ_BODY_TEMPERATURE' | 'READ_BASAL_BODY_TEMPERATURE' | 'READ_BODY_FAT' | 'READ_FLOORS_CLIMBED' | 'READ_SLEEP' | 'READ_EXERCISE_TIME' | 'READ_BIOLOGICAL_SEX' | 'READ_BLOOD_TYPE' | 'READ_DATE_OF_BIRTH' | 'READ_FITZPATRICK_SKIN_TYPE' | 'READ_WHEELCHAIR_USE'</code>
+<code>'READ_STEPS' | 'READ_WORKOUTS' | 'WRITE_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'WRITE_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'WRITE_TOTAL_CALORIES' | 'READ_DISTANCE' | 'WRITE_DISTANCE' | 'READ_WEIGHT' | 'READ_HEIGHT' | 'READ_HEART_RATE' | 'WRITE_HEART_RATE' | 'READ_RESTING_HEART_RATE' | 'READ_ROUTE' | 'WRITE_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE' | 'READ_BASAL_CALORIES' | 'READ_RESPIRATORY_RATE' | 'READ_OXYGEN_SATURATION' | 'READ_BLOOD_GLUCOSE' | 'READ_BODY_TEMPERATURE' | 'READ_BASAL_BODY_TEMPERATURE' | 'READ_BODY_FAT' | 'READ_FLOORS_CLIMBED' | 'READ_SLEEP' | 'READ_EXERCISE_TIME' | 'READ_BIOLOGICAL_SEX' | 'READ_BLOOD_TYPE' | 'READ_DATE_OF_BIRTH' | 'READ_FITZPATRICK_SKIN_TYPE' | 'READ_WHEELCHAIR_USE'</code>
 
 
 #### HealthBiologicalSex
@@ -611,5 +664,10 @@ Construct a type with a set of properties K of type T
 #### LatestDataType
 
 <code>'steps' | 'active-calories' | 'total-calories' | 'basal-calories' | 'distance' | 'weight' | 'height' | 'heart-rate' | 'resting-heart-rate' | 'respiratory-rate' | 'oxygen-saturation' | 'blood-glucose' | 'body-temperature' | 'basal-body-temperature' | 'body-fat' | 'flights-climbed' | 'exercise-time' | 'distance-cycling' | 'mindfulness' | 'sleep' | 'sleep-rem' | 'hrv' | 'blood-pressure'</code>
+
+
+#### WorkoutActivityType
+
+<code>'rock-climbing' | 'climbing' | 'hiking' | 'running' | 'walking' | 'cycling' | 'biking' | 'strength-training' | 'yoga' | 'other'</code>
 
 </docgen-api>

@@ -10,11 +10,14 @@ import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.aggregate.AggregationResultGroupedByPeriod
 import androidx.health.connect.client.records.*
+import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.records.Record
+import androidx.health.connect.client.units.kilocalories
+import androidx.health.connect.client.units.meters
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -57,7 +60,13 @@ enum class CapHealthPermission {
     READ_BODY_FAT,
     READ_FLOORS_CLIMBED,
     READ_BASAL_CALORIES,
-    READ_SLEEP;
+    READ_SLEEP,
+    WRITE_WORKOUTS,
+    WRITE_ACTIVE_CALORIES,
+    WRITE_TOTAL_CALORIES,
+    WRITE_DISTANCE,
+    WRITE_HEART_RATE,
+    WRITE_ROUTE;
 
     companion object {
         fun from(s: String): CapHealthPermission? {
@@ -95,7 +104,13 @@ enum class CapHealthPermission {
         Permission(alias = "READ_BODY_FAT", strings = ["android.permission.health.READ_BODY_FAT"]),
         Permission(alias = "READ_FLOORS_CLIMBED", strings = ["android.permission.health.READ_FLOORS_CLIMBED"]),
         Permission(alias = "READ_BASAL_CALORIES", strings = ["android.permission.health.READ_BASAL_METABOLIC_RATE"]),
-        Permission(alias = "READ_SLEEP", strings = ["android.permission.health.READ_SLEEP"])
+        Permission(alias = "READ_SLEEP", strings = ["android.permission.health.READ_SLEEP"]),
+        Permission(alias = "WRITE_WORKOUTS", strings = ["android.permission.health.WRITE_EXERCISE"]),
+        Permission(alias = "WRITE_ACTIVE_CALORIES", strings = ["android.permission.health.WRITE_ACTIVE_CALORIES_BURNED"]),
+        Permission(alias = "WRITE_TOTAL_CALORIES", strings = ["android.permission.health.WRITE_TOTAL_CALORIES_BURNED"]),
+        Permission(alias = "WRITE_DISTANCE", strings = ["android.permission.health.WRITE_DISTANCE"]),
+        Permission(alias = "WRITE_HEART_RATE", strings = ["android.permission.health.WRITE_HEART_RATE"]),
+        Permission(alias = "WRITE_ROUTE", strings = ["android.permission.health.WRITE_EXERCISE_ROUTE"])
     ]
 )
 
@@ -132,7 +147,13 @@ class HealthPlugin : Plugin() {
         CapHealthPermission.READ_BODY_FAT to HealthPermission.getReadPermission(BodyFatRecord::class),
         CapHealthPermission.READ_FLOORS_CLIMBED to HealthPermission.getReadPermission(FloorsClimbedRecord::class),
         CapHealthPermission.READ_BASAL_CALORIES to HealthPermission.getReadPermission(BasalMetabolicRateRecord::class),
-        CapHealthPermission.READ_SLEEP to HealthPermission.getReadPermission(SleepSessionRecord::class)
+        CapHealthPermission.READ_SLEEP to HealthPermission.getReadPermission(SleepSessionRecord::class),
+        CapHealthPermission.WRITE_WORKOUTS to HealthPermission.getWritePermission(ExerciseSessionRecord::class),
+        CapHealthPermission.WRITE_ACTIVE_CALORIES to HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class),
+        CapHealthPermission.WRITE_TOTAL_CALORIES to HealthPermission.getWritePermission(TotalCaloriesBurnedRecord::class),
+        CapHealthPermission.WRITE_DISTANCE to HealthPermission.getWritePermission(DistanceRecord::class),
+        CapHealthPermission.WRITE_HEART_RATE to HealthPermission.getWritePermission(HeartRateRecord::class),
+        CapHealthPermission.WRITE_ROUTE to HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE
     )
 
     override fun load() {
@@ -1499,6 +1520,151 @@ class HealthPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun saveWorkout(call: PluginCall) {
+        if (!ensureClientInitialized(call)) return
+
+        val activityTypeRaw = call.getString("activityType")
+        val startDate = call.getString("startDate")
+        val endDate = call.getString("endDate")
+        val calories = call.getDouble("calories")
+        val distance = call.getDouble("distance")
+        val metadata = call.getObject("metadata")
+        val routeArray = call.getArray("route")
+        val heartRateArray = call.getArray("heartRateSamples")
+
+        if (activityTypeRaw == null || startDate == null || endDate == null) {
+            call.reject("Missing required parameters: activityType, startDate, endDate")
+            return
+        }
+
+        val startInstant = parseInstant(startDate)
+        val endInstant = parseInstant(endDate)
+        if (startInstant == null || endInstant == null) {
+            call.reject("Invalid startDate or endDate; must be ISO-8601 strings.")
+            return
+        }
+        if (!startInstant.isBefore(endInstant)) {
+            call.reject("startDate must be before endDate")
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val granted = healthConnectClient.permissionController.getGrantedPermissions()
+                fun ensurePermission(cap: CapHealthPermission, name: String): Boolean {
+                    val hc = permissionMapping[cap]
+                    val ok = hc != null && granted.contains(hc)
+                    if (!ok) {
+                        call.reject("Missing $name permission")
+                    }
+                    return ok
+                }
+
+                if (!ensurePermission(CapHealthPermission.WRITE_WORKOUTS, "WRITE_WORKOUTS")) return@launch
+
+                val startZoneOffset = startInstant.atZone(ZoneId.systemDefault()).offset
+                val endZoneOffset = endInstant.atZone(ZoneId.systemDefault()).offset
+
+                val exerciseType = resolveExerciseType(activityTypeRaw)
+                val title = metadata?.optString("title")?.takeIf { it.isNotBlank() }
+                val notes = metadata?.optString("notes")?.takeIf { it.isNotBlank() }
+                    ?: metadata?.optString("description")?.takeIf { it.isNotBlank() }
+
+                val route = buildExerciseRoute(routeArray, startInstant, endInstant)
+                if (route != null && !granted.contains(HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE)) {
+                    call.reject("Missing WRITE_ROUTE permission")
+                    return@launch
+                }
+
+                val records = mutableListOf<Record>()
+                records.add(
+                    ExerciseSessionRecord(
+                        startTime = startInstant,
+                        startZoneOffset = startZoneOffset,
+                        endTime = endInstant,
+                        endZoneOffset = endZoneOffset,
+                        metadata = Metadata.manualEntry(),
+                        exerciseType = exerciseType,
+                        title = title,
+                        notes = notes,
+                        exerciseRoute = route
+                    )
+                )
+
+                if (calories != null) {
+                    when {
+                        granted.contains(permissionMapping[CapHealthPermission.WRITE_ACTIVE_CALORIES]) -> {
+                            records.add(
+                                ActiveCaloriesBurnedRecord(
+                                    startTime = startInstant,
+                                    startZoneOffset = startZoneOffset,
+                                    endTime = endInstant,
+                                    endZoneOffset = endZoneOffset,
+                                    energy = kilocalories(calories),
+                                    metadata = Metadata.manualEntry()
+                                )
+                            )
+                        }
+                        granted.contains(permissionMapping[CapHealthPermission.WRITE_TOTAL_CALORIES]) -> {
+                            records.add(
+                                TotalCaloriesBurnedRecord(
+                                    startTime = startInstant,
+                                    startZoneOffset = startZoneOffset,
+                                    endTime = endInstant,
+                                    endZoneOffset = endZoneOffset,
+                                    energy = kilocalories(calories),
+                                    metadata = Metadata.manualEntry()
+                                )
+                            )
+                        }
+                        else -> {
+                            call.reject("Missing WRITE_ACTIVE_CALORIES or WRITE_TOTAL_CALORIES permission")
+                            return@launch
+                        }
+                    }
+                }
+
+                if (distance != null) {
+                    if (!ensurePermission(CapHealthPermission.WRITE_DISTANCE, "WRITE_DISTANCE")) return@launch
+                    records.add(
+                        DistanceRecord(
+                            startTime = startInstant,
+                            startZoneOffset = startZoneOffset,
+                            endTime = endInstant,
+                            endZoneOffset = endZoneOffset,
+                            distance = meters(distance),
+                            metadata = Metadata.manualEntry()
+                        )
+                    )
+                }
+
+                val heartRateSamples = buildHeartRateSamples(heartRateArray, startInstant, endInstant)
+                if (heartRateSamples.isNotEmpty()) {
+                    if (!ensurePermission(CapHealthPermission.WRITE_HEART_RATE, "WRITE_HEART_RATE")) return@launch
+                    records.add(
+                        HeartRateRecord(
+                            startTime = heartRateSamples.first().time,
+                            startZoneOffset = heartRateSamples.first().time.atZone(ZoneId.systemDefault()).offset,
+                            endTime = heartRateSamples.last().time,
+                            endZoneOffset = heartRateSamples.last().time.atZone(ZoneId.systemDefault()).offset,
+                            samples = heartRateSamples,
+                            metadata = Metadata.manualEntry()
+                        )
+                    )
+                }
+
+                val response = healthConnectClient.insertRecords(records)
+                val result = JSObject()
+                result.put("success", true)
+                response.recordIdsList.firstOrNull()?.let { result.put("id", it) }
+                call.resolve(result)
+            } catch (e: Exception) {
+                call.reject("Failed to save workout: ${e.message}")
+            }
+        }
+    }
+
+    @PluginMethod
     fun queryWorkouts(call: PluginCall) {
         if (!ensureClientInitialized(call)) return
         val startDate = call.getString("startDate")
@@ -1687,6 +1853,71 @@ class HealthPlugin : Plugin() {
             routeArray.put(routeObject)
         }
         return routeArray
+    }
+
+    private fun parseInstant(value: Any?): Instant? {
+        return when (value) {
+            is String -> {
+                try {
+                    Instant.parse(value)
+                } catch (_: Exception) {
+                    value.toDoubleOrNull()?.let { Instant.ofEpochMilli(it.toLong()) }
+                }
+            }
+            is Number -> Instant.ofEpochMilli(value.toLong())
+            else -> null
+        }
+    }
+
+    private fun resolveExerciseType(activityTypeRaw: String): Int {
+        val normalized = activityTypeRaw.lowercase().replace("-", "_")
+        return ExerciseSessionRecord.EXERCISE_TYPE_STRING_TO_INT_MAP[normalized]
+            ?: exerciseTypeMapping.entries.firstOrNull { it.value.equals(activityTypeRaw, ignoreCase = true) }?.key?.toInt()
+            ?: ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT
+    }
+
+    private fun buildExerciseRoute(routeArray: JSArray?, startTime: Instant, endTime: Instant): ExerciseRoute? {
+        val locations = routeArray
+            ?.toList<JSObject>()
+            ?.mapNotNull { point ->
+                val lat = point.optDouble("lat", Double.NaN)
+                val lng = point.optDouble("lng", Double.NaN)
+                val ts = parseInstant(point.opt("timestamp")) ?: return@mapNotNull null
+                if (lat.isNaN() || lng.isNaN()) return@mapNotNull null
+                if (ts.isBefore(startTime) || ts.isAfter(endTime)) return@mapNotNull null
+                val altitudeValue = point.optDouble("alt", Double.NaN)
+                ExerciseRoute.Location(
+                    time = ts,
+                    latitude = lat,
+                    longitude = lng,
+                    altitude = if (altitudeValue.isNaN()) null else meters(altitudeValue)
+                )
+            }
+            ?.sortedBy { it.time }
+            ?.toList()
+
+        if (locations.isNullOrEmpty()) {
+            return null
+        }
+        return ExerciseRoute(locations)
+    }
+
+    private fun buildHeartRateSamples(array: JSArray?, startTime: Instant, endTime: Instant): List<HeartRateRecord.Sample> {
+        return array
+            ?.toList<JSObject>()
+            ?.mapNotNull { point ->
+                val bpm = point.optDouble("bpm", Double.NaN)
+                val ts = parseInstant(point.opt("timestamp")) ?: return@mapNotNull null
+                if (bpm.isNaN()) return@mapNotNull null
+                val clampedBpm = bpm.toLong().coerceIn(1, 300)
+                HeartRateRecord.Sample(
+                    time = ts,
+                    beatsPerMinute = clampedBpm
+                )
+            }
+            ?.filter { !it.time.isBefore(startTime) && !it.time.isAfter(endTime) }
+            ?.sortedBy { it.time }
+            ?: emptyList()
     }
 
 

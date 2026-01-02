@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Capacitor
 import HealthKit
+import CoreLocation
 
 /**
  * Please read the Capacitor iOS Plugin Development Guide
@@ -19,7 +20,8 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "queryAggregated", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryWorkouts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryLatestSample", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getCharacteristics", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getCharacteristics", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "saveWorkout", returnType: CAPPluginReturnPromise)
     ]
     
     let healthStore = HKHealthStore()
@@ -41,7 +43,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         var result: [String: String] = [:]
 
         for permission in permissions {
-            let hkTypes = permissionToHKObjectType(permission)
+            let hkTypes = permissionToHKObjectType(permission) + permissionToHKSampleType(permission)
             for type in hkTypes {
                 let status = healthStore.authorizationStatus(for: type)
 
@@ -69,19 +71,20 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         
         print("⚡️ [HealthPlugin] Requesting permissions: \(permissions)")
         
-        let types: [HKObjectType] = permissions.flatMap { permissionToHKObjectType($0) }
+        let readTypes: [HKObjectType] = permissions.flatMap { permissionToHKObjectType($0) }
+        let shareTypes: [HKSampleType] = permissions.flatMap { permissionToHKSampleType($0) }
         
-        print("⚡️ [HealthPlugin] Mapped to \(types.count) HKObjectTypes")
+        print("⚡️ [HealthPlugin] Mapped to \(readTypes.count) HKObjectTypes (read) and \(shareTypes.count) HKSampleTypes (share)")
         
         // Validate that we have at least one valid permission type
-        guard !types.isEmpty else {
+        guard !readTypes.isEmpty || !shareTypes.isEmpty else {
             let invalidPermissions = permissions.filter { permissionToHKObjectType($0).isEmpty }
             call.reject("No valid permission types found. Invalid permissions: \(invalidPermissions)")
             return
         }
         
         DispatchQueue.main.async {
-            self.healthStore.requestAuthorization(toShare: nil, read: Set(types)) { success, error in
+            self.healthStore.requestAuthorization(toShare: Set(shareTypes), read: Set(readTypes)) { success, error in
                 DispatchQueue.main.async {
                     if success {
                         //we don't know which actual permissions were granted, so we assume all
@@ -634,17 +637,37 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
                 HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)   // iOS 16+
             ].compactMap { $0 }
+        case "WRITE_TOTAL_CALORIES":
+            return [
+                HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
+                HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
+            ].compactMap { $0 }
         case "READ_ACTIVE_CALORIES":
+            return [HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)].compactMap{$0}
+        case "WRITE_ACTIVE_CALORIES":
             return [HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)].compactMap{$0}
         case "READ_WORKOUTS":
             return [HKObjectType.workoutType()].compactMap{$0}
+        case "WRITE_WORKOUTS":
+            return [HKObjectType.workoutType()].compactMap{$0}
         case "READ_HEART_RATE":
+            return  [HKObjectType.quantityType(forIdentifier: .heartRate)].compactMap{$0}
+        case "WRITE_HEART_RATE":
             return  [HKObjectType.quantityType(forIdentifier: .heartRate)].compactMap{$0}
         case "READ_RESTING_HEART_RATE":
             return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 }
         case "READ_ROUTE":
             return  [HKSeriesType.workoutRoute()].compactMap{$0}
+        case "WRITE_ROUTE":
+            return  [HKSeriesType.workoutRoute()].compactMap{$0}
         case "READ_DISTANCE":
+            return [
+                HKObjectType.quantityType(forIdentifier: .distanceCycling),
+                HKObjectType.quantityType(forIdentifier: .distanceSwimming),
+                HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
+                HKObjectType.quantityType(forIdentifier: .distanceDownhillSnowSports)
+            ].compactMap{$0}
+        case "WRITE_DISTANCE":
             return [
                 HKObjectType.quantityType(forIdentifier: .distanceCycling),
                 HKObjectType.quantityType(forIdentifier: .distanceSwimming),
@@ -751,6 +774,34 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         default:
             print("⚡️ [HealthPlugin] Unknown permission: \(permission)")
             return []
+        }
+    }
+
+    func permissionToHKSampleType(_ permission: String) -> [HKSampleType] {
+        switch permission {
+        case "WRITE_WORKOUTS":
+            return [HKObjectType.workoutType()].compactMap { $0 as? HKSampleType }
+        case "WRITE_ACTIVE_CALORIES":
+            fallthrough
+        case "WRITE_TOTAL_CALORIES":
+            return [
+                HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
+                HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
+            ].compactMap { $0 as? HKSampleType }
+        case "WRITE_DISTANCE":
+            return [
+                HKObjectType.quantityType(forIdentifier: .distanceCycling),
+                HKObjectType.quantityType(forIdentifier: .distanceSwimming),
+                HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
+                HKObjectType.quantityType(forIdentifier: .distanceDownhillSnowSports)
+            ].compactMap { $0 as? HKSampleType }
+        case "WRITE_HEART_RATE":
+            return [HKObjectType.quantityType(forIdentifier: .heartRate)].compactMap { $0 as? HKSampleType }
+        case "WRITE_ROUTE":
+            return [HKSeriesType.workoutRoute()].compactMap { $0 as? HKSampleType }
+        default:
+            // For convenience, allow read permissions that are sample types to be added to the share set when requested.
+            return permissionToHKObjectType(permission).compactMap { $0 as? HKSampleType }
         }
     }
 
@@ -1398,7 +1449,223 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
+
+    private func parseDate(_ value: Any?) -> Date? {
+        if let date = value as? Date {
+            return date
+        }
+        if let str = value as? String {
+            if let parsed = isoDateFormatter.date(from: str) {
+                return parsed
+            }
+            if let millis = Double(str) {
+                return Date(timeIntervalSince1970: millis / 1000)
+            }
+        }
+        if let number = value as? NSNumber {
+            return Date(timeIntervalSince1970: number.doubleValue / 1000)
+        }
+        return nil
+    }
+
+    private func workoutActivityType(from value: String) -> HKWorkoutActivityType? {
+        let normalized = value.lowercased()
+        let mapping: [String: UInt] = [
+            "rock-climbing": 9,
+            "climbing": 9,
+            "hiking": 24,
+            "running": 37,
+            "walking": 52,
+            "cycling": 13,
+            "biking": 13,
+            "strength-training": 50,
+            "strength_training": 50,
+            "traditional-strength-training": 50,
+            "yoga": 57,
+            "other": 3000
+        ]
+
+        if let raw = mapping[normalized] {
+            return HKWorkoutActivityType(rawValue: raw)
+        }
+        return HKWorkoutActivityType.other
+    }
+
+    private func sanitizeMetadata(_ metadata: JSObject?) -> [String: Any]? {
+        guard let metadata = metadata else { return nil }
+        var cleaned: [String: Any] = [:]
+        for (key, value) in metadata {
+            switch value {
+            case let number as NSNumber:
+                cleaned[key] = number
+            case let string as NSString:
+                cleaned[key] = string
+            case let date as Date:
+                cleaned[key] = date
+            case let string as String:
+                cleaned[key] = string
+            default:
+                continue
+            }
+        }
+        return cleaned.isEmpty ? nil : cleaned
+    }
+
+    private func buildRouteLocations(from value: Any?, defaultDate: Date) -> [CLLocation] {
+        guard let routeItems = value as? [Any] else { return [] }
+        var locations: [CLLocation] = []
+
+        for case let point as JSObject in routeItems {
+            guard let lat = point["lat"] as? CLLocationDegrees,
+                  let lng = point["lng"] as? CLLocationDegrees else { continue }
+            let alt = (point["alt"] as? NSNumber)?.doubleValue ?? 0
+            let timestamp = parseDate(point["timestamp"]) ?? defaultDate
+            let location = CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
+                altitude: alt,
+                horizontalAccuracy: kCLLocationAccuracyBest,
+                verticalAccuracy: kCLLocationAccuracyBest,
+                timestamp: timestamp
+            )
+            locations.append(location)
+        }
+
+        return locations.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private func buildHeartRateSamples(from value: Any?, defaultStart: Date, defaultEnd: Date) -> [HKQuantitySample] {
+        guard let arr = value as? [Any],
+              let type = HKObjectType.quantityType(forIdentifier: .heartRate) else { return [] }
+
+        let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+        var samples: [HKQuantitySample] = []
+        for case let point as JSObject in arr {
+            guard let bpm = point["bpm"] as? NSNumber else { continue }
+            let timestamp = parseDate(point["timestamp"]) ?? defaultStart
+            let quantity = HKQuantity(unit: unit, doubleValue: bpm.doubleValue)
+            let sample = HKQuantitySample(type: type, quantity: quantity, start: timestamp, end: timestamp)
+            samples.append(sample)
+        }
+
+        // Ensure samples fall within the workout window to avoid HK errors.
+        return samples
+            .filter { $0.startDate >= defaultStart && $0.endDate <= defaultEnd }
+            .sorted { $0.startDate < $1.startDate }
+    }
     
+    
+    @objc func saveWorkout(_ call: CAPPluginCall) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            call.reject("Health data is unavailable on this device.")
+            return
+        }
+
+        guard let activityTypeString = call.getString("activityType"),
+              let startDateString = call.getString("startDate"),
+              let endDateString = call.getString("endDate"),
+              let startDate = parseDate(startDateString),
+              let endDate = parseDate(endDateString) else {
+            call.reject("Missing or invalid parameters")
+            return
+        }
+
+        guard let activityType = workoutActivityType(from: activityTypeString) else {
+            call.reject("Unsupported activityType: \(activityTypeString)")
+            return
+        }
+
+        guard startDate < endDate else {
+            call.reject("startDate must be before endDate")
+            return
+        }
+
+        let energyQuantity: HKQuantity? = {
+            if let calories = call.getDouble("calories") {
+                return HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: calories)
+            }
+            return nil
+        }()
+        let distanceQuantity: HKQuantity? = {
+            if let distance = call.getDouble("distance") {
+                return HKQuantity(unit: HKUnit.meter(), doubleValue: distance)
+            }
+            return nil
+        }()
+
+        let workout = HKWorkout(
+            activityType: activityType,
+            start: startDate,
+            end: endDate,
+            workoutEvents: nil,
+            totalEnergyBurned: energyQuantity,
+            totalDistance: distanceQuantity,
+            metadata: sanitizeMetadata(call.getObject("metadata"))
+        )
+
+        let routeLocations = buildRouteLocations(from: call.getArray("route"), defaultDate: startDate)
+        let heartRateSamples = buildHeartRateSamples(from: call.getArray("heartRateSamples"), defaultStart: startDate, defaultEnd: endDate)
+
+        healthStore.save(workout) { success, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    call.reject("Failed to save workout: \(error.localizedDescription)")
+                    return
+                }
+                guard success else {
+                    call.reject("Failed to save workout")
+                    return
+                }
+
+                if routeLocations.isEmpty && heartRateSamples.isEmpty {
+                    call.resolve(["success": true, "id": workout.uuid.uuidString])
+                    return
+                }
+
+                let group = DispatchGroup()
+                var saveError: String?
+
+                if !routeLocations.isEmpty {
+                    group.enter()
+                    let routeBuilder = HKWorkoutRouteBuilder(healthStore: self.healthStore, device: nil)
+                    routeBuilder.insertRouteData(routeLocations) { inserted, insertError in
+                        if let insertError = insertError {
+                            saveError = "Failed to insert route: \(insertError.localizedDescription)"
+                            group.leave()
+                            return
+                        }
+                        routeBuilder.finishRoute(with: workout, metadata: nil) { _, finishError in
+                            if let finishError = finishError {
+                                saveError = "Failed to finish route: \(finishError.localizedDescription)"
+                            } else if !inserted {
+                                saveError = "Failed to insert route"
+                            }
+                            group.leave()
+                        }
+                    }
+                }
+
+                if !heartRateSamples.isEmpty {
+                    group.enter()
+                    self.healthStore.add(heartRateSamples, to: workout) { hrSuccess, hrError in
+                        if let hrError = hrError {
+                            saveError = "Failed to save heart rate samples: \(hrError.localizedDescription)"
+                        } else if !hrSuccess {
+                            saveError = "Failed to save heart rate samples"
+                        }
+                        group.leave()
+                    }
+                }
+
+                group.notify(queue: .main) {
+                    if let saveError = saveError {
+                        call.reject(saveError)
+                    } else {
+                        call.resolve(["success": true, "id": workout.uuid.uuidString])
+                    }
+                }
+            }
+        }
+    }
     
     @objc func queryWorkouts(_ call: CAPPluginCall) {
         guard let startDateString =  call.getString("startDate"),

@@ -95,19 +95,33 @@ export interface HealthPlugin {
    * Query latest steps sample
    */
   querySteps(): Promise<QueryLatestSampleResponse>;
+
+  /**
+   * Create a workout session with optional totals and route/heart-rate samples.
+   * - iOS stores an `HKWorkout` (activityType mapped from `activityType`) with total energy/distance and optional metadata/route/heart-rate samples.
+   * - Android stores an `ExerciseSessionRecord` plus `ActiveCaloriesBurnedRecord`, `DistanceRecord`, and `HeartRateRecord` when provided. Routes are attached via `ExerciseRoute`.
+   * - Requires matching WRITE_* permissions for the values you include (e.g., WRITE_WORKOUTS + WRITE_ACTIVE_CALORIES + WRITE_DISTANCE + WRITE_HEART_RATE + WRITE_ROUTE).
+   */
+  saveWorkout(request: SaveWorkoutRequest): Promise<SaveWorkoutResponse>;
 }
 
 export declare type HealthPermission =
   | 'READ_STEPS'
   | 'READ_WORKOUTS'
+  | 'WRITE_WORKOUTS'
   | 'READ_ACTIVE_CALORIES'
+  | 'WRITE_ACTIVE_CALORIES'
   | 'READ_TOTAL_CALORIES'
+  | 'WRITE_TOTAL_CALORIES'
   | 'READ_DISTANCE'
+  | 'WRITE_DISTANCE'
   | 'READ_WEIGHT'
   | 'READ_HEIGHT'
   | 'READ_HEART_RATE'
+  | 'WRITE_HEART_RATE'
   | 'READ_RESTING_HEART_RATE'
   | 'READ_ROUTE'
+  | 'WRITE_ROUTE'
   | 'READ_MINDFULNESS'
   | 'READ_HRV'
   | 'READ_BLOOD_PRESSURE'
@@ -182,6 +196,34 @@ export interface RouteSample {
 
 export interface QueryWorkoutResponse {
   workouts: Workout[];
+}
+
+export type WorkoutActivityType =
+  | 'rock-climbing'
+  | 'climbing'
+  | 'hiking'
+  | 'running'
+  | 'walking'
+  | 'cycling'
+  | 'biking'
+  | 'strength-training'
+  | 'yoga'
+  | 'other';
+
+export interface SaveWorkoutRequest {
+  activityType: WorkoutActivityType;
+  startDate: string;
+  endDate: string;
+  calories?: number;
+  distance?: number;
+  metadata?: Record<string, any>;
+  route?: RouteSample[];
+  heartRateSamples?: HeartRateSample[];
+}
+
+export interface SaveWorkoutResponse {
+  success: boolean;
+  id?: string;
 }
 
 export interface Workout {
