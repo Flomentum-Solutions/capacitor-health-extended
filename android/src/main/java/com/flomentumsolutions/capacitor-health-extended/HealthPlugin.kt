@@ -1,4 +1,4 @@
-package com.flomentumsolutions.health.capacitor
+package com.flomentumsolutions.capacitor-health-extended.capacitor
 
 import android.content.Intent
 import android.util.Log
@@ -17,7 +17,9 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.units.kilocalories
+import androidx.health.connect.client.units.kilograms
 import androidx.health.connect.client.units.meters
+import androidx.health.connect.client.units.percent
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -66,7 +68,11 @@ enum class CapHealthPermission {
     WRITE_TOTAL_CALORIES,
     WRITE_DISTANCE,
     WRITE_HEART_RATE,
-    WRITE_ROUTE;
+    WRITE_ROUTE,
+    WRITE_WEIGHT,
+    WRITE_HEIGHT,
+    WRITE_BODY_FAT,
+    WRITE_RESTING_HEART_RATE;
 
     companion object {
         fun from(s: String): CapHealthPermission? {
@@ -110,7 +116,11 @@ enum class CapHealthPermission {
         Permission(alias = "WRITE_TOTAL_CALORIES", strings = ["android.permission.health.WRITE_TOTAL_CALORIES_BURNED"]),
         Permission(alias = "WRITE_DISTANCE", strings = ["android.permission.health.WRITE_DISTANCE"]),
         Permission(alias = "WRITE_HEART_RATE", strings = ["android.permission.health.WRITE_HEART_RATE"]),
-        Permission(alias = "WRITE_ROUTE", strings = ["android.permission.health.WRITE_EXERCISE_ROUTE"])
+        Permission(alias = "WRITE_ROUTE", strings = ["android.permission.health.WRITE_EXERCISE_ROUTE"]),
+        Permission(alias = "WRITE_WEIGHT", strings = ["android.permission.health.WRITE_WEIGHT"]),
+        Permission(alias = "WRITE_HEIGHT", strings = ["android.permission.health.WRITE_HEIGHT"]),
+        Permission(alias = "WRITE_BODY_FAT", strings = ["android.permission.health.WRITE_BODY_FAT"]),
+        Permission(alias = "WRITE_RESTING_HEART_RATE", strings = ["android.permission.health.WRITE_RESTING_HEART_RATE"])
     ]
 )
 
@@ -153,7 +163,11 @@ class HealthPlugin : Plugin() {
         CapHealthPermission.WRITE_TOTAL_CALORIES to HealthPermission.getWritePermission(TotalCaloriesBurnedRecord::class),
         CapHealthPermission.WRITE_DISTANCE to HealthPermission.getWritePermission(DistanceRecord::class),
         CapHealthPermission.WRITE_HEART_RATE to HealthPermission.getWritePermission(HeartRateRecord::class),
-        CapHealthPermission.WRITE_ROUTE to HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE
+        CapHealthPermission.WRITE_ROUTE to HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE,
+        CapHealthPermission.WRITE_WEIGHT to HealthPermission.getWritePermission(WeightRecord::class),
+        CapHealthPermission.WRITE_HEIGHT to HealthPermission.getWritePermission(HeightRecord::class),
+        CapHealthPermission.WRITE_BODY_FAT to HealthPermission.getWritePermission(BodyFatRecord::class),
+        CapHealthPermission.WRITE_RESTING_HEART_RATE to HealthPermission.getWritePermission(RestingHeartRateRecord::class)
     )
 
     override fun load() {
@@ -1520,6 +1534,101 @@ class HealthPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun saveMetrics(call: PluginCall) {
+        if (!ensureClientInitialized(call)) return
+
+        val weightKg = call.getDouble("weightKg")
+        val heightCm = call.getDouble("heightCm")
+        val bodyFatPercent = call.getDouble("bodyFatPercent")
+        val restingHeartRate = call.getDouble("restingHeartRate")
+
+        if (weightKg == null && heightCm == null && bodyFatPercent == null && restingHeartRate == null) {
+            call.reject("No metrics provided")
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val granted = healthConnectClient.permissionController.getGrantedPermissions()
+                fun ensurePermission(cap: CapHealthPermission, name: String): Boolean {
+                    val hc = permissionMapping[cap]
+                    val ok = hc != null && granted.contains(hc)
+                    if (!ok) {
+                        call.reject("Missing $name permission")
+                    }
+                    return ok
+                }
+
+                val now = Instant.now()
+                val offset = now.atZone(ZoneId.systemDefault()).offset
+
+                val records = mutableListOf<Record>()
+
+                weightKg?.let {
+                    if (!ensurePermission(CapHealthPermission.WRITE_WEIGHT, "WRITE_WEIGHT")) return@launch
+                    records.add(
+                        WeightRecord(
+                            time = now,
+                            zoneOffset = offset,
+                            weight = it.kilograms,
+                            metadata = Metadata.manualEntry()
+                        )
+                    )
+                }
+
+                heightCm?.let {
+                    if (!ensurePermission(CapHealthPermission.WRITE_HEIGHT, "WRITE_HEIGHT")) return@launch
+                    records.add(
+                        HeightRecord(
+                            time = now,
+                            zoneOffset = offset,
+                            height = (it / 100.0).meters,
+                            metadata = Metadata.manualEntry()
+                        )
+                    )
+                }
+
+                bodyFatPercent?.let {
+                    if (!ensurePermission(CapHealthPermission.WRITE_BODY_FAT, "WRITE_BODY_FAT")) return@launch
+                    records.add(
+                        BodyFatRecord(
+                            time = now,
+                            zoneOffset = offset,
+                            percentage = it.percent,
+                            metadata = Metadata.manualEntry()
+                        )
+                    )
+                }
+
+                restingHeartRate?.let {
+                    if (!ensurePermission(CapHealthPermission.WRITE_RESTING_HEART_RATE, "WRITE_RESTING_HEART_RATE")) return@launch
+                    records.add(
+                        RestingHeartRateRecord(
+                            time = now,
+                            zoneOffset = offset,
+                            beatsPerMinute = it.toLong(),
+                            metadata = Metadata.manualEntry()
+                        )
+                    )
+                }
+
+                if (records.isEmpty()) {
+                    call.reject("No metrics were added; missing permissions?")
+                    return@launch
+                }
+
+                val response = healthConnectClient.insertRecords(records)
+                val result = JSObject()
+                result.put("success", true)
+                result.put("inserted", response.recordIdsList.size)
+                call.resolve(result)
+            } catch (e: Exception) {
+                call.reject("Failed to save metrics: ${e.message}")
+            }
+        }
+    }
+
+    @PluginMethod
     fun saveWorkout(call: PluginCall) {
         if (!ensureClientInitialized(call)) return
 
@@ -1600,7 +1709,7 @@ class HealthPlugin : Plugin() {
                                     startZoneOffset = startZoneOffset,
                                     endTime = endInstant,
                                     endZoneOffset = endZoneOffset,
-                                    energy = kilocalories(calories),
+                                    energy = calories.kilocalories,
                                     metadata = Metadata.manualEntry()
                                 )
                             )
@@ -1612,7 +1721,7 @@ class HealthPlugin : Plugin() {
                                     startZoneOffset = startZoneOffset,
                                     endTime = endInstant,
                                     endZoneOffset = endZoneOffset,
-                                    energy = kilocalories(calories),
+                                    energy = calories.kilocalories,
                                     metadata = Metadata.manualEntry()
                                 )
                             )
@@ -1632,7 +1741,7 @@ class HealthPlugin : Plugin() {
                             startZoneOffset = startZoneOffset,
                             endTime = endInstant,
                             endZoneOffset = endZoneOffset,
-                            distance = meters(distance),
+                            distance = distance.meters,
                             metadata = Metadata.manualEntry()
                         )
                     )
@@ -1890,7 +1999,7 @@ class HealthPlugin : Plugin() {
                     time = ts,
                     latitude = lat,
                     longitude = lng,
-                    altitude = if (altitudeValue.isNaN()) null else meters(altitudeValue)
+                    altitude = if (altitudeValue.isNaN()) null else altitudeValue.meters
                 )
             }
             ?.sortedBy { it.time }

@@ -21,13 +21,14 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "queryWorkouts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryLatestSample", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getCharacteristics", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "saveMetrics", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "saveWorkout", returnType: CAPPluginReturnPromise)
     ]
     
     let healthStore = HKHealthStore()
     
     /// Serial queue to make route‑location mutations thread‑safe without locks
-    private let routeSyncQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.routeSync")
+    private let routeSyncQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.routeSync")
     
     @objc func isHealthAvailable(_ call: CAPPluginCall) {
         let isAvailable = HKHealthStore.isHealthDataAvailable()
@@ -623,6 +624,90 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
     
+    @objc func saveMetrics(_ call: CAPPluginCall) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            call.reject("Health data is unavailable on this device.")
+            return
+        }
+
+        let weightKg = call.getDouble("weightKg")
+        let heightCm = call.getDouble("heightCm")
+        let bodyFatPercent = call.getDouble("bodyFatPercent")
+        let restingHeartRate = call.getDouble("restingHeartRate")
+
+        if weightKg == nil && heightCm == nil && bodyFatPercent == nil && restingHeartRate == nil {
+            call.reject("No metrics provided")
+            return
+        }
+
+        let shareTypes: Set<HKSampleType> = [
+            weightKg != nil ? HKObjectType.quantityType(forIdentifier: .bodyMass) : nil,
+            heightCm != nil ? HKObjectType.quantityType(forIdentifier: .height) : nil,
+            bodyFatPercent != nil ? HKObjectType.quantityType(forIdentifier: .bodyFatPercentage) : nil,
+            restingHeartRate != nil ? HKObjectType.quantityType(forIdentifier: .restingHeartRate) : nil
+        ].compactMap { $0 as? HKSampleType }.reduce(into: Set<HKSampleType>()) { $0.insert($1) }
+
+        guard !shareTypes.isEmpty else {
+            call.reject("No valid metric types available on this device")
+            return
+        }
+
+        healthStore.requestAuthorization(toShare: shareTypes, read: nil) { [weak self] success, error in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                if let error = error {
+                    call.reject("Authorization failed: \(error.localizedDescription)")
+                    return
+                }
+                guard success else {
+                    call.reject("Authorization not granted for metrics")
+                    return
+                }
+
+                let now = Date()
+                var samples: [HKSample] = []
+
+                if let weightKg = weightKg, let type = HKObjectType.quantityType(forIdentifier: .bodyMass) {
+                    let quantity = HKQuantity(unit: HKUnit.gramUnit(with: .kilo), doubleValue: weightKg)
+                    samples.append(HKQuantitySample(type: type, quantity: quantity, start: now, end: now, metadata: nil))
+                }
+
+                if let heightCm = heightCm, let type = HKObjectType.quantityType(forIdentifier: .height) {
+                    let quantity = HKQuantity(unit: HKUnit.meter(), doubleValue: heightCm / 100.0)
+                    samples.append(HKQuantitySample(type: type, quantity: quantity, start: now, end: now, metadata: nil))
+                }
+
+                if let bodyFatPercent = bodyFatPercent, let type = HKObjectType.quantityType(forIdentifier: .bodyFatPercentage) {
+                    let quantity = HKQuantity(unit: HKUnit.percent(), doubleValue: bodyFatPercent / 100.0)
+                    samples.append(HKQuantitySample(type: type, quantity: quantity, start: now, end: now, metadata: nil))
+                }
+
+                if let restingHeartRate = restingHeartRate, let type = HKObjectType.quantityType(forIdentifier: .restingHeartRate) {
+                    let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+                    let quantity = HKQuantity(unit: unit, doubleValue: restingHeartRate)
+                    samples.append(HKQuantitySample(type: type, quantity: quantity, start: now, end: now, metadata: nil))
+                }
+
+                guard !samples.isEmpty else {
+                    call.reject("No metrics to save after validation")
+                    return
+                }
+
+                self.healthStore.save(samples) { saveSuccess, saveError in
+                    DispatchQueue.main.async {
+                        if let saveError = saveError {
+                            call.reject("Failed to save metrics: \(saveError.localizedDescription)")
+                        } else if !saveSuccess {
+                            call.reject("Failed to save metrics")
+                        } else {
+                            call.resolve(["success": true, "inserted": samples.count])
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Permission helpers
     func permissionToHKObjectType(_ permission: String) -> [HKObjectType] {
         switch permission {
@@ -660,6 +745,14 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return  [HKSeriesType.workoutRoute()].compactMap{$0}
         case "WRITE_ROUTE":
             return  [HKSeriesType.workoutRoute()].compactMap{$0}
+        case "WRITE_WEIGHT":
+            return [HKObjectType.quantityType(forIdentifier: .bodyMass)].compactMap { $0 as? HKSampleType }
+        case "WRITE_HEIGHT":
+            return [HKObjectType.quantityType(forIdentifier: .height)].compactMap { $0 as? HKSampleType }
+        case "WRITE_BODY_FAT":
+            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 as? HKSampleType }
+        case "WRITE_RESTING_HEART_RATE":
+            return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 as? HKSampleType }
         case "READ_DISTANCE":
             return [
                 HKObjectType.quantityType(forIdentifier: .distanceCycling),
@@ -1695,7 +1788,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             let outerGroup = DispatchGroup()
-            let resultsQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.workoutResults")
+            let resultsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.workoutResults")
             var workoutResults: [[String: Any]] = []
             var errors: [String: String] = [:]
             
@@ -1713,8 +1806,8 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                     "distance": workout.totalDistance?.doubleValue(for: .meter()) ?? 0
                 ]
                 let innerGroup = DispatchGroup()
-                let heartRateQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.heartRates")
-                let routeQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.routes")
+                let heartRateQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.heartRates")
+                let routeQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.routes")
                 var localHeartRates: [[String: Any]] = []
                 var localRoutes: [[String: Any]] = []
                 
@@ -1813,7 +1906,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let self = self else { return }
             if let routes = samples as? [HKWorkoutRoute], error == nil {
                 let routeDispatchGroup = DispatchGroup()
-                let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.healthplugin.allLocations")
+                let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.allLocations")
                 var allLocations: [[String: Any]] = []
                 
                 for route in routes {

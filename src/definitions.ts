@@ -103,43 +103,14 @@ export interface HealthPlugin {
    * - Requires matching WRITE_* permissions for the values you include (e.g., WRITE_WORKOUTS + WRITE_ACTIVE_CALORIES + WRITE_DISTANCE + WRITE_HEART_RATE + WRITE_ROUTE).
    */
   saveWorkout(request: SaveWorkoutRequest): Promise<SaveWorkoutResponse>;
+
+  /**
+   * Save user-provided body metrics to the health platform.
+   */
+  saveMetrics(request: SaveMetricsRequest): Promise<SaveMetricsResponse>;
 }
 
-export declare type HealthPermission =
-  | 'READ_STEPS'
-  | 'READ_WORKOUTS'
-  | 'WRITE_WORKOUTS'
-  | 'READ_ACTIVE_CALORIES'
-  | 'WRITE_ACTIVE_CALORIES'
-  | 'READ_TOTAL_CALORIES'
-  | 'WRITE_TOTAL_CALORIES'
-  | 'READ_DISTANCE'
-  | 'WRITE_DISTANCE'
-  | 'READ_WEIGHT'
-  | 'READ_HEIGHT'
-  | 'READ_HEART_RATE'
-  | 'WRITE_HEART_RATE'
-  | 'READ_RESTING_HEART_RATE'
-  | 'READ_ROUTE'
-  | 'WRITE_ROUTE'
-  | 'READ_MINDFULNESS'
-  | 'READ_HRV'
-  | 'READ_BLOOD_PRESSURE'
-  | 'READ_BASAL_CALORIES'
-  | 'READ_RESPIRATORY_RATE'
-  | 'READ_OXYGEN_SATURATION'
-  | 'READ_BLOOD_GLUCOSE'
-  | 'READ_BODY_TEMPERATURE'
-  | 'READ_BASAL_BODY_TEMPERATURE'
-  | 'READ_BODY_FAT'
-  | 'READ_FLOORS_CLIMBED'
-  | 'READ_SLEEP'
-  | 'READ_EXERCISE_TIME'
-  | 'READ_BIOLOGICAL_SEX'
-  | 'READ_BLOOD_TYPE'
-  | 'READ_DATE_OF_BIRTH'
-  | 'READ_FITZPATRICK_SKIN_TYPE'
-  | 'READ_WHEELCHAIR_USE';
+export declare type HealthPermission = 'READ_STEPS' | 'READ_WORKOUTS' | 'WRITE_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'WRITE_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'WRITE_TOTAL_CALORIES' | 'READ_DISTANCE' | 'WRITE_DISTANCE' | 'READ_WEIGHT' | 'WRITE_WEIGHT' | 'READ_HEIGHT' | 'WRITE_HEIGHT' | 'READ_HEART_RATE' | 'WRITE_HEART_RATE' | 'READ_RESTING_HEART_RATE' | 'WRITE_RESTING_HEART_RATE' | 'READ_ROUTE' | 'WRITE_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE' | 'READ_BASAL_CALORIES' | 'READ_RESPIRATORY_RATE' | 'READ_OXYGEN_SATURATION' | 'READ_BLOOD_GLUCOSE' | 'READ_BODY_TEMPERATURE' | 'READ_BASAL_BODY_TEMPERATURE' | 'READ_BODY_FAT' | 'WRITE_BODY_FAT' | 'READ_FLOORS_CLIMBED' | 'READ_SLEEP' | 'READ_EXERCISE_TIME' | 'READ_BIOLOGICAL_SEX' | 'READ_BLOOD_TYPE' | 'READ_DATE_OF_BIRTH' | 'READ_FITZPATRICK_SKIN_TYPE' | 'READ_WHEELCHAIR_USE';
 
 export type LatestDataType =
   | 'steps'
@@ -224,6 +195,18 @@ export interface SaveWorkoutRequest {
 export interface SaveWorkoutResponse {
   success: boolean;
   id?: string;
+}
+
+export interface SaveMetricsRequest {
+    weightKg?: number;
+    heightCm?: number;
+    bodyFatPercent?: number;
+    restingHeartRate?: number;
+}
+
+export interface SaveMetricsResponse {
+    success: boolean;
+    inserted?: number;
 }
 
 export interface Workout {
