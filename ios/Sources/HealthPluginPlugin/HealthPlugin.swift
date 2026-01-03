@@ -28,7 +28,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
     let healthStore = HKHealthStore()
     
     /// Serial queue to make route‑location mutations thread‑safe without locks
-    private let routeSyncQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.routeSync")
+    private let routeSyncQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.routeSync")
     
     @objc func isHealthAvailable(_ call: CAPPluginCall) {
         let isAvailable = HKHealthStore.isHealthDataAvailable()
@@ -1788,7 +1788,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             let outerGroup = DispatchGroup()
-            let resultsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.workoutResults")
+            let resultsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.workoutResults")
             var workoutResults: [[String: Any]] = []
             var errors: [String: String] = [:]
             
@@ -1806,8 +1806,8 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                     "distance": workout.totalDistance?.doubleValue(for: .meter()) ?? 0
                 ]
                 let innerGroup = DispatchGroup()
-                let heartRateQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.heartRates")
-                let routeQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.routes")
+                let heartRateQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.heartRates")
+                let routeQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.routes")
                 var localHeartRates: [[String: Any]] = []
                 var localRoutes: [[String: Any]] = []
                 
@@ -1906,7 +1906,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let self = self else { return }
             if let routes = samples as? [HKWorkoutRoute], error == nil {
                 let routeDispatchGroup = DispatchGroup()
-                let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitor-health-extended.allLocations")
+                let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.allLocations")
                 var allLocations: [[String: Any]] = []
                 
                 for route in routes {

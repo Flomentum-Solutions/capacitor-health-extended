@@ -63,6 +63,8 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
 
 ### Android
 
+The plugin namespace/package is `com.flomentumsolutions.capacitorhealthextended.capacitor` (hyphen removed from older `com.flomentumsolutions.capacitor-health-extended` references); use this when wiring activities, manifest entries, or ProGuard rules.
+
 * Android Manifest in root tag right after opening manifest tag
 ```xml
     <!-- Make Health Connect visible to detect installation -->

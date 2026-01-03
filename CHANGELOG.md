@@ -5,13 +5,25 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.7.3] – 2026-01-03
+### Added
+- None
+
+### Fixed
+- Android package/namespace now matches the plugin id so source files live under the correct `com.flomentumsolutions.capacitorhealthextended` path (no hyphen).
+
+### Security
+- None
+
+---
+
 ## [0.7.1 & 0.7.2] – 2026-01-03
 ### Added
 - `saveMetrics()` to write manual health metrics (weight, height, body fat %, resting heart rate) to HealthKit and Health Connect with manual-entry metadata.
 - WRITE permissions for weight/height/body fat/resting heart rate exposed in the API so apps can request them before saving metrics.
 
 ### Fixed
-- Android package/namespace now matches the plugin id so source files live under the correct `com.flomentumsolutions.capacitor-health-extended` path.
+- None
 
 ### Security
 - None
