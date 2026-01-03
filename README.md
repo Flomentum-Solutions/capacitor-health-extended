@@ -70,6 +70,7 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
     </queries>
 
     <!-- Declare permissions you’ll request -->
+    <!-- READ permissions -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
     <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
@@ -92,6 +93,7 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
     <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
     <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <!-- WRITE permissions -->
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
     <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
     <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED" />
@@ -105,8 +107,9 @@ Include the WRITE_* entries when you call `saveWorkout` to insert exercise sessi
 * Android Manifest in application tag
 ```xml
     <!-- Handle Health Connect rationale (Android 13-) -->
+    <!-- REPLACE com.my.app with your details -->
     <activity
-        android:name=".PermissionsRationaleActivity"
+        android:name="com.my.app.PermissionsRationaleActivity" 
         android:exported="true">
         <intent-filter>
             <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
@@ -115,10 +118,11 @@ Include the WRITE_* entries when you call `saveWorkout` to insert exercise sessi
     </activity>
 
     <!-- Handle Android 14+ alias -->
+    <!-- REPLACE com.my.app with your details -->
     <activity-alias
         android:name="ViewPermissionUsageActivity"
         android:exported="true"
-        android:targetActivity=".PermissionsRationaleActivity"
+        android:targetActivity="com.my.app.PermissionsRationaleActivity"
         android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
         <intent-filter>
             <action android:name="android.intent.action.VIEW_PERMISSION_USAGE"/>
@@ -137,8 +141,9 @@ Include the WRITE_* entries when you call `saveWorkout` to insert exercise sessi
     </application>
 ```
 
-* Create `com.my.app.PermissionsRationaleActivity.kt` with:
+* Create `com.my.app.PermissionsRationaleActivity.kt` with (REPLACE com.my.app with your details):
 ```xml
+<!-- REPLACE com.my.app with your details -->
 package com.my.app
 
 import android.os.Bundle
@@ -633,7 +638,9 @@ Create a workout session with optional totals and route/heart-rate samples.
 
 Construct a type with a set of properties K of type T
 
-<code>{ [P in K]: T; }</code>
+<code>{
+ [P in K]: T;
+ }</code>
 
 
 #### HealthPermission
