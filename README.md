@@ -28,6 +28,7 @@ Thanks [@mley](https://github.com/mley) for the ground work. The goal of this fo
 - Query aggregated data like steps or calories
 - Retrieve workout sessions with optional route and heart rate data
 - Create workout sessions (e.g., rock climbing) with totals, optional routes, and heart-rate samples (write APIs)
+- Save manual metrics (weight, height, body fat %, resting heart rate) to HealthKit/Health Connect (write APIs)
 - Fetch the latest samples for steps, distance (incl. cycling), calories (active/total/basal), heart‑rate, resting HR, HRV, respiratory rate, blood pressure, oxygen saturation, blood glucose, body temperature (basal + core), body fat, height, weight, flights climbed, sleep (incl. REM duration), and exercise time.
 - Read profile characteristics on iOS: biological sex, blood type, date of birth, Fitzpatrick skin type, wheelchair use.
 
@@ -58,7 +59,7 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
 * Make sure your app id has the 'HealthKit' entitlement when this plugin is installed (see iOS dev center).
 * Also, make sure your app and App Store description comply with the Apple review guidelines.
 * There are two keys to be added to the info.plist file: NSHealthShareUsageDescription and NSHealthUpdateUsageDescription.
-* Request WRITE_* permissions with `requestHealthPermissions` to enable saving workouts/energy/distance/routes/heart-rate samples to HealthKit.
+* Request WRITE_* permissions with `requestHealthPermissions` to enable saving workouts/energy/distance/routes/heart-rate samples and manual metrics (weight/height/body fat/resting HR) to HealthKit.
 
 ### Android
 
@@ -100,9 +101,13 @@ you can keep using the CocoaPods spec `FlomentumSolutionsCapacitorHealthExtended
     <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
     <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE_ROUTE" />
+    <uses-permission android:name="android.permission.health.WRITE_WEIGHT" />
+    <uses-permission android:name="android.permission.health.WRITE_HEIGHT" />
+    <uses-permission android:name="android.permission.health.WRITE_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.WRITE_RESTING_HEART_RATE" />
 ```
 
-Include the WRITE_* entries when you call `saveWorkout` to insert exercise sessions, energy, distance, routes, or heart rate samples.
+Include the WRITE_* entries when you call `saveWorkout` to insert exercise sessions, energy, distance, routes, or heart rate samples, and add the metric write permissions when using `saveMetrics`.
 
 * Android Manifest in application tag
 ```xml
@@ -239,6 +244,7 @@ This setup ensures your WebView will load HTTPS content securely and complies wi
 * [`queryHeartRate()`](#queryheartrate)
 * [`querySteps()`](#querysteps)
 * [`saveWorkout(...)`](#saveworkout)
+* [`saveMetrics(...)`](#savemetrics)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 
@@ -483,6 +489,23 @@ Create a workout session with optional totals and route/heart-rate samples.
 --------------------
 
 
+### saveMetrics(...)
+
+```typescript
+saveMetrics(request: SaveMetricsRequest) => Promise<SaveMetricsResponse>
+```
+
+Save user-provided body metrics to the health platform.
+
+| Param         | Type                                                              |
+| ------------- | ----------------------------------------------------------------- |
+| **`request`** | <code><a href="#savemetricsrequest">SaveMetricsRequest</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#savemetricsresponse">SaveMetricsResponse</a>&gt;</code>
+
+--------------------
+
+
 ### Interfaces
 
 
@@ -631,6 +654,24 @@ Create a workout session with optional totals and route/heart-rate samples.
 | **`heartRateSamples`** | <code>HeartRateSample[]</code>                                      |
 
 
+#### SaveMetricsResponse
+
+| Prop           | Type                 |
+| -------------- | -------------------- |
+| **`success`**  | <code>boolean</code> |
+| **`inserted`** | <code>number</code>  |
+
+
+#### SaveMetricsRequest
+
+| Prop                   | Type                |
+| ---------------------- | ------------------- |
+| **`weightKg`**         | <code>number</code> |
+| **`heightCm`**         | <code>number</code> |
+| **`bodyFatPercent`**   | <code>number</code> |
+| **`restingHeartRate`** | <code>number</code> |
+
+
 ### Type Aliases
 
 
@@ -638,14 +679,12 @@ Create a workout session with optional totals and route/heart-rate samples.
 
 Construct a type with a set of properties K of type T
 
-<code>{
- [P in K]: T;
- }</code>
+<code>{ [P in K]: T; }</code>
 
 
 #### HealthPermission
 
-<code>'READ_STEPS' | 'READ_WORKOUTS' | 'WRITE_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'WRITE_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'WRITE_TOTAL_CALORIES' | 'READ_DISTANCE' | 'WRITE_DISTANCE' | 'READ_WEIGHT' | 'READ_HEIGHT' | 'READ_HEART_RATE' | 'WRITE_HEART_RATE' | 'READ_RESTING_HEART_RATE' | 'READ_ROUTE' | 'WRITE_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE' | 'READ_BASAL_CALORIES' | 'READ_RESPIRATORY_RATE' | 'READ_OXYGEN_SATURATION' | 'READ_BLOOD_GLUCOSE' | 'READ_BODY_TEMPERATURE' | 'READ_BASAL_BODY_TEMPERATURE' | 'READ_BODY_FAT' | 'READ_FLOORS_CLIMBED' | 'READ_SLEEP' | 'READ_EXERCISE_TIME' | 'READ_BIOLOGICAL_SEX' | 'READ_BLOOD_TYPE' | 'READ_DATE_OF_BIRTH' | 'READ_FITZPATRICK_SKIN_TYPE' | 'READ_WHEELCHAIR_USE'</code>
+<code>'READ_STEPS' | 'READ_WORKOUTS' | 'WRITE_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'WRITE_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'WRITE_TOTAL_CALORIES' | 'READ_DISTANCE' | 'WRITE_DISTANCE' | 'READ_WEIGHT' | 'WRITE_WEIGHT' | 'READ_HEIGHT' | 'WRITE_HEIGHT' | 'READ_HEART_RATE' | 'WRITE_HEART_RATE' | 'READ_RESTING_HEART_RATE' | 'WRITE_RESTING_HEART_RATE' | 'READ_ROUTE' | 'WRITE_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE' | 'READ_BASAL_CALORIES' | 'READ_RESPIRATORY_RATE' | 'READ_OXYGEN_SATURATION' | 'READ_BLOOD_GLUCOSE' | 'READ_BODY_TEMPERATURE' | 'READ_BASAL_BODY_TEMPERATURE' | 'READ_BODY_FAT' | 'WRITE_BODY_FAT' | 'READ_FLOORS_CLIMBED' | 'READ_SLEEP' | 'READ_EXERCISE_TIME' | 'READ_BIOLOGICAL_SEX' | 'READ_BLOOD_TYPE' | 'READ_DATE_OF_BIRTH' | 'READ_FITZPATRICK_SKIN_TYPE' | 'READ_WHEELCHAIR_USE'</code>
 
 
 #### HealthBiologicalSex

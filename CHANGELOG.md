@@ -5,6 +5,32 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.7.1 & 0.7.2] – 2026-01-03
+### Added
+- `saveMetrics()` to write manual health metrics (weight, height, body fat %, resting heart rate) to HealthKit and Health Connect with manual-entry metadata.
+- WRITE permissions for weight/height/body fat/resting heart rate exposed in the API so apps can request them before saving metrics.
+
+### Fixed
+- Android package/namespace now matches the plugin id so source files live under the correct `com.flomentumsolutions.capacitor-health-extended` path.
+
+### Security
+- None
+
+---
+
+## [0.7.0] – 2026-01-02
+### Added
+- New `saveWorkout()` API to create workouts with optional totals, routes, and heart-rate samples on iOS and Android.
+- WRITE_* permissions for workouts, calories, distance, routes, and heart rate added to the API and Android manifest guidance so apps can request/write data.
+
+### Fixed
+- None
+
+### Security
+- None
+
+---
+
 ## [0.6.4] – 2025-12-17
 ### Added
 - `sleep-rem` latest-sample data type to return REM duration minutes for the most recent sleep session (iOS 16+ sleep stages; Android Health Connect REM stages).
