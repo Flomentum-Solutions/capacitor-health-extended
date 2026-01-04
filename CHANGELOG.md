@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.7.4] – 2026-01-04
+### Added
+- None
+
+### Fixed
+- iOS `requestHealthPermissions` no longer requests write/share authorization when only read permissions are provided (avoids Info.plist `NSHealthUpdateUsageDescription` crash); write permissions for weight/height/body fat/resting heart rate now map explicitly to share types.
+
+### Security
+- None
+
+---
+
 ## [0.7.3] – 2026-01-03
 ### Added
 - None

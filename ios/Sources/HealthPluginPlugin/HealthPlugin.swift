@@ -892,9 +892,17 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return [HKObjectType.quantityType(forIdentifier: .heartRate)].compactMap { $0 as? HKSampleType }
         case "WRITE_ROUTE":
             return [HKSeriesType.workoutRoute()].compactMap { $0 as? HKSampleType }
+        case "WRITE_WEIGHT":
+            return [HKObjectType.quantityType(forIdentifier: .bodyMass)].compactMap { $0 as? HKSampleType }
+        case "WRITE_HEIGHT":
+            return [HKObjectType.quantityType(forIdentifier: .height)].compactMap { $0 as? HKSampleType }
+        case "WRITE_BODY_FAT":
+            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 as? HKSampleType }
+        case "WRITE_RESTING_HEART_RATE":
+            return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 as? HKSampleType }
         default:
-            // For convenience, allow read permissions that are sample types to be added to the share set when requested.
-            return permissionToHKObjectType(permission).compactMap { $0 as? HKSampleType }
+            // Avoid requesting write/share authorization when only read permissions are supplied.
+            return []
         }
     }
 
