@@ -349,11 +349,15 @@ Opens the Google Health Connect app in PlayStore
 ### getCharacteristics()
 
 ```typescript
-getCharacteristics() => Promise<CharacteristicsResponse>
+getCharacteristics(request?: CharacteristicsRequest) => Promise<CharacteristicsResponse>
 ```
 
-iOS only: Reads user characteristics such as biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use.
+iOS only: Reads user characteristics such as biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use. Pass `fields` to request a single characteristic (e.g., date of birth) and keep permissions narrowly scoped; defaults to all when omitted.
 Values are null when unavailable or permission was not granted. Android does not expose these characteristics; it returns `platformSupported: false` and a `platformMessage` for UI hints without emitting null values.
+
+| Param         | Type                                                                      |
+| ------------- | ------------------------------------------------------------------------- |
+| **`request`** | <code><a href="#characteristicsrequest">CharacteristicsRequest</a></code> |
 
 **Returns:** <code>Promise&lt;<a href="#characteristicsresponse">CharacteristicsResponse</a>&gt;</code>
 
@@ -525,6 +529,13 @@ Save user-provided body metrics to the health platform.
 | **`permissions`** | <code>HealthPermission[]</code> |
 
 
+#### CharacteristicsRequest
+
+| Prop         | Type                                                                 | Description                                                |
+| ------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **`fields`** | <code><a href="#characteristicfield">CharacteristicField</a>[]</code> | Characteristics to query; defaults to all when unspecified |
+
+
 #### CharacteristicsResponse
 
 | Prop                      | Type                                                                                    | Description                                                                                                                             |
@@ -682,6 +693,11 @@ Save user-provided body metrics to the health platform.
 Construct a type with a set of properties K of type T
 
 <code>{ [P in K]: T; }</code>
+
+
+#### CharacteristicField
+
+<code>'biologicalSex' | 'bloodType' | 'dateOfBirth' | 'fitzpatrickSkinType' | 'wheelchairUse'</code>
 
 
 #### HealthPermission

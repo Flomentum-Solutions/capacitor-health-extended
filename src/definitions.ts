@@ -47,8 +47,10 @@ export interface HealthPlugin {
   /**
    * iOS only: Reads user characteristics such as biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use.
    * Values are null when unavailable or permission was not granted. Android does not expose these characteristics; it returns `platformSupported: false` and a `platformMessage` for UI hints without emitting null values.
+   *
+   * Passing `fields` lets you request only specific characteristics (e.g., date of birth) to keep permissions scoped narrowly. Defaults to all characteristics when omitted.
    */
-  getCharacteristics(): Promise<CharacteristicsResponse>;
+  getCharacteristics(request?: CharacteristicsRequest): Promise<CharacteristicsResponse>;
 
   /**
    * Query aggregated data
@@ -290,6 +292,20 @@ export interface CharacteristicsResponse {
    * Optional platform-specific message; on Android we return a user-facing note explaining that values remain empty unless synced from iOS.
    */
   platformMessage?: string;
+}
+
+export type CharacteristicField =
+  | 'biologicalSex'
+  | 'bloodType'
+  | 'dateOfBirth'
+  | 'fitzpatrickSkinType'
+  | 'wheelchairUse';
+
+export interface CharacteristicsRequest {
+  /**
+   * Characteristics to query. Defaults to all characteristics when omitted.
+   */
+  fields?: CharacteristicField[];
 }
 
 export type HealthBiologicalSex = 'female' | 'male' | 'other' | 'not_set' | 'unknown';

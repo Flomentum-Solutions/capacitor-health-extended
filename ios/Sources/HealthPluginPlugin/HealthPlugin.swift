@@ -29,6 +29,29 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
     
     /// Serial queue to make route‑location mutations thread‑safe without locks
     private let routeSyncQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.routeSync")
+
+    private enum CharacteristicField: String, CaseIterable {
+        case biologicalSex
+        case bloodType
+        case dateOfBirth
+        case fitzpatrickSkinType
+        case wheelchairUse
+
+        var hkObjectType: HKObjectType? {
+            switch self {
+            case .biologicalSex:
+                return HKObjectType.characteristicType(forIdentifier: .biologicalSex)
+            case .bloodType:
+                return HKObjectType.characteristicType(forIdentifier: .bloodType)
+            case .dateOfBirth:
+                return HKObjectType.characteristicType(forIdentifier: .dateOfBirth)
+            case .fitzpatrickSkinType:
+                return HKObjectType.characteristicType(forIdentifier: .fitzpatrickSkinType)
+            case .wheelchairUse:
+                return HKObjectType.characteristicType(forIdentifier: .wheelchairUse)
+            }
+        }
+    }
     
     @objc func isHealthAvailable(_ call: CAPPluginCall) {
         let isAvailable = HKHealthStore.isHealthDataAvailable()
@@ -114,65 +137,99 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        let characteristicTypes: [HKObjectType] = [
-            HKObjectType.characteristicType(forIdentifier: .biologicalSex),
-            HKObjectType.characteristicType(forIdentifier: .bloodType),
-            HKObjectType.characteristicType(forIdentifier: .dateOfBirth),
-            HKObjectType.characteristicType(forIdentifier: .fitzpatrickSkinType),
-            HKObjectType.characteristicType(forIdentifier: .wheelchairUse)
-        ].compactMap { $0 }
+        let requestedFields = call.getArray("fields") as? [String] ?? []
+        let fieldsToLoad: [CharacteristicField]
+        if requestedFields.isEmpty {
+            fieldsToLoad = CharacteristicField.allCases
+        } else {
+            var normalized: [CharacteristicField] = []
+            var invalid: [String] = []
+
+            for name in requestedFields {
+                if let field = CharacteristicField(rawValue: name) {
+                    if !normalized.contains(field) {
+                        normalized.append(field)
+                    }
+                } else {
+                    invalid.append(name)
+                }
+            }
+
+            if !invalid.isEmpty {
+                let validFields = CharacteristicField.allCases.map { $0.rawValue }.joined(separator: ", ")
+                call.reject("Invalid characteristic field(s): \(invalid.joined(separator: ", ")). Valid fields are: \(validFields)")
+                return
+            }
+
+            fieldsToLoad = normalized.isEmpty ? CharacteristicField.allCases : normalized
+        }
+
+        let characteristicTypes: [HKObjectType] = fieldsToLoad.compactMap { $0.hkObjectType }
+
+        if characteristicTypes.count != fieldsToLoad.count {
+            let missing = fieldsToLoad.filter { $0.hkObjectType == nil }.map { $0.rawValue }
+            let missingList = missing.joined(separator: ", ")
+            let message = missing.isEmpty ? "HealthKit characteristics are unavailable on this device." : "Requested characteristics are unavailable on this device: \(missingList)"
+            call.reject(message)
+            return
+        }
 
         guard !characteristicTypes.isEmpty else {
             call.reject("HealthKit characteristics are unavailable on this device.")
             return
         }
 
-        func resolveCharacteristics() {
+        func resolveCharacteristics(for fields: [CharacteristicField]) {
             var result: [String: Any] = [:]
 
-            func setValue(_ key: String, _ value: String?) {
-                result[key] = value ?? NSNull()
+            func setValue(_ key: CharacteristicField, _ value: String?) {
+                result[key.rawValue] = value ?? NSNull()
             }
 
-            if let biologicalSexObject = try? healthStore.biologicalSex() {
-                setValue("biologicalSex", mapBiologicalSex(biologicalSexObject.biologicalSex))
-            } else {
-                setValue("biologicalSex", nil)
-            }
-
-            if let bloodTypeObject = try? healthStore.bloodType() {
-                setValue("bloodType", mapBloodType(bloodTypeObject.bloodType))
-            } else {
-                setValue("bloodType", nil)
-            }
-
-            if let dateComponents = try? healthStore.dateOfBirthComponents() {
-                setValue("dateOfBirth", isoBirthDateString(from: dateComponents))
-            } else {
-                setValue("dateOfBirth", nil)
-            }
-
-            if let fitzpatrickObject = try? healthStore.fitzpatrickSkinType() {
-                setValue("fitzpatrickSkinType", mapFitzpatrickSkinType(fitzpatrickObject.skinType))
-            } else {
-                setValue("fitzpatrickSkinType", nil)
-            }
-
-            if let wheelchairUseObject = try? healthStore.wheelchairUse() {
-                setValue("wheelchairUse", mapWheelchairUse(wheelchairUseObject.wheelchairUse))
-            } else {
-                setValue("wheelchairUse", nil)
+            for field in fields {
+                switch field {
+                case .biologicalSex:
+                    if let biologicalSexObject = try? healthStore.biologicalSex() {
+                        setValue(field, mapBiologicalSex(biologicalSexObject.biologicalSex))
+                    } else {
+                        setValue(field, nil)
+                    }
+                case .bloodType:
+                    if let bloodTypeObject = try? healthStore.bloodType() {
+                        setValue(field, mapBloodType(bloodTypeObject.bloodType))
+                    } else {
+                        setValue(field, nil)
+                    }
+                case .dateOfBirth:
+                    if let dateComponents = try? healthStore.dateOfBirthComponents() {
+                        setValue(field, isoBirthDateString(from: dateComponents))
+                    } else {
+                        setValue(field, nil)
+                    }
+                case .fitzpatrickSkinType:
+                    if let fitzpatrickObject = try? healthStore.fitzpatrickSkinType() {
+                        setValue(field, mapFitzpatrickSkinType(fitzpatrickObject.skinType))
+                    } else {
+                        setValue(field, nil)
+                    }
+                case .wheelchairUse:
+                    if let wheelchairUseObject = try? healthStore.wheelchairUse() {
+                        setValue(field, mapWheelchairUse(wheelchairUseObject.wheelchairUse))
+                    } else {
+                        setValue(field, nil)
+                    }
+                }
             }
 
             result["platformSupported"] = true
             call.resolve(result)
         }
 
-        func requestCharacteristicsAccess() {
-            self.healthStore.requestAuthorization(toShare: nil, read: Set(characteristicTypes)) { success, error in
+        func requestCharacteristicsAccess(for fields: [CharacteristicField], types: [HKObjectType]) {
+            self.healthStore.requestAuthorization(toShare: nil, read: Set(types)) { success, error in
                 DispatchQueue.main.async {
                     if success {
-                        resolveCharacteristics()
+                        resolveCharacteristics(for: fields)
                     } else if let error = error {
                         call.reject("Authorization failed: \(error.localizedDescription)")
                     } else {
@@ -194,9 +251,9 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
 
                 switch status {
                 case .shouldRequest, .unknown:
-                    requestCharacteristicsAccess()
+                    requestCharacteristicsAccess(for: fieldsToLoad, types: characteristicTypes)
                 default:
-                    resolveCharacteristics()
+                    resolveCharacteristics(for: fieldsToLoad)
                 }
             }
         }

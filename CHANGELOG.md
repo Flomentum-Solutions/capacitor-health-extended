@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.7.5] - 2026-01-04
+### Added
+- `getCharacteristics` accepts an optional `fields` filter to request individual characteristics and narrow required permissions.
+
+### Fixed
+- None
+
+### Security
+- None
+
+---
+
 ## [0.7.4] – 2026-01-04
 ### Added
 - None

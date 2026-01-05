@@ -350,11 +350,15 @@ class HealthPlugin : Plugin() {
 
     @PluginMethod
     fun getCharacteristics(call: PluginCall) {
+        val requestedFields = call.getArray("fields")
+            ?.toList<String>()
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
         val result = JSObject()
         result.put("platformSupported", false)
         result.put(
             "platformMessage",
-            "Health Connect does not expose characteristics; this section stays empty unless synced from an iOS device."
+            "Health Connect does not expose characteristics; this section stays empty unless synced from an iOS device.${if (requestedFields.isEmpty()) "" else " Requested fields: ${requestedFields.joinToString(\", \")}."}"
         )
         call.resolve(result)
     }
