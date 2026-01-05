@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.7.6] – 2026-01-05
+### Added
+- None
+
+### Fixed
+- Android `getCharacteristics` stub now uses a safe string template so interpolation renders correctly without tripping Kotlin parsing.
+
+### Security
+- None
+
+---
+
 ## [0.7.5] - 2026-01-04
 ### Added
 - `getCharacteristics` accepts an optional `fields` filter to request individual characteristics and narrow required permissions.

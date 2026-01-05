@@ -354,12 +354,15 @@ class HealthPlugin : Plugin() {
             ?.toList<String>()
             ?.filter { it.isNotBlank() }
             ?: emptyList()
-        val result = JSObject()
-        result.put("platformSupported", false)
-        result.put(
-            "platformMessage",
-            "Health Connect does not expose characteristics; this section stays empty unless synced from an iOS device.${if (requestedFields.isEmpty()) "" else " Requested fields: ${requestedFields.joinToString(\", \")}."}"
-        )
+        val baseMessage =
+            "Health Connect does not expose characteristics; this section stays empty unless synced from an iOS device."
+        val platformMessage =
+            if (requestedFields.isEmpty()) baseMessage
+            else "$baseMessage Requested fields: ${requestedFields.joinToString(", ")}."
+        val result = JSObject().apply {
+            put("platformSupported", false)
+            put("platformMessage", platformMessage)
+        }
         call.resolve(result)
     }
 
