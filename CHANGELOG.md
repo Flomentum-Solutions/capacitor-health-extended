@@ -5,6 +5,19 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.7.7] – 2026-01-12
+### Added
+- None
+
+### Fixed
+- iOS now implements the `queryWeight()`/`queryHeight()` helpers (plus `queryHeartRate()`/`querySteps()`), keeping latest-sample convenience queries in sync with Android and avoiding missing weight updates.
+- iOS now exposes `openHealthConnectSettings()` (aliasing `openAppleHealthSettings()`) and `showHealthConnectInPlayStore()` (no-op) for API parity.
+
+### Security
+- None
+
+---
+
 ## [0.7.6] – 2026-01-05
 ### Added
 - None

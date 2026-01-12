@@ -17,9 +17,15 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "checkHealthPermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestHealthPermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openAppleHealthSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openHealthConnectSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "showHealthConnectInPlayStore", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryAggregated", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryWorkouts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "queryLatestSample", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "queryWeight", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "queryHeight", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "queryHeartRate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "querySteps", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getCharacteristics", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "saveMetrics", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "saveWorkout", returnType: CAPPluginReturnPromise)
@@ -264,7 +270,27 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Missing data type")
             return
         }
-        
+
+        queryLatestSample(for: dataTypeString, call: call)
+    }
+
+    @objc func queryWeight(_ call: CAPPluginCall) {
+        queryLatestSample(for: "weight", call: call)
+    }
+
+    @objc func queryHeight(_ call: CAPPluginCall) {
+        queryLatestSample(for: "height", call: call)
+    }
+
+    @objc func queryHeartRate(_ call: CAPPluginCall) {
+        queryLatestSample(for: "heart-rate", call: call)
+    }
+
+    @objc func querySteps(_ call: CAPPluginCall) {
+        queryLatestSample(for: "steps", call: call)
+    }
+
+    private func queryLatestSample(for dataTypeString: String, call: CAPPluginCall) {
         print("⚡️ [HealthPlugin] Querying latest sample for data type: \(dataTypeString)")
         // ---- Special handling for blood‑pressure correlation ----
         if dataTypeString == "blood-pressure" {
@@ -670,6 +696,14 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         healthStore.execute(query)
     }
     
+    @objc func openHealthConnectSettings(_ call: CAPPluginCall) {
+        openAppleHealthSettings(call)
+    }
+
+    @objc func showHealthConnectInPlayStore(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
     @objc func openAppleHealthSettings(_ call: CAPPluginCall) {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             DispatchQueue.main.async {

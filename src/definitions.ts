@@ -36,11 +36,13 @@ export interface HealthPlugin {
 
   /**
    * Opens the Google Health Connect app
+   * iOS: Aliases openAppleHealthSettings().
    */
   openHealthConnectSettings(): Promise<void>;
 
   /**
    * Opens the Google Health Connect app in PlayStore
+   * iOS: Resolves without action.
    */
   showHealthConnectInPlayStore(): Promise<void>;
 
@@ -80,21 +82,25 @@ export interface HealthPlugin {
 
   /**
    * Query latest weight sample
+   * Convenience wrapper around queryLatestSample({ dataType: 'weight' }).
    */
   queryWeight(): Promise<QueryLatestSampleResponse>;
 
   /**
    * Query latest height sample
+   * Convenience wrapper around queryLatestSample({ dataType: 'height' }).
    */
   queryHeight(): Promise<QueryLatestSampleResponse>;
 
   /**
    * Query latest heart rate sample
+   * Convenience wrapper around queryLatestSample({ dataType: 'heart-rate' }).
    */
   queryHeartRate(): Promise<QueryLatestSampleResponse>;
 
   /**
    * Query latest steps sample
+   * Convenience wrapper around queryLatestSample({ dataType: 'steps' }).
    */
   querySteps(): Promise<QueryLatestSampleResponse>;
 

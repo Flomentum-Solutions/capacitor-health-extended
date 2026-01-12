@@ -237,7 +237,7 @@ This setup ensures your WebView will load HTTPS content securely and complies wi
 * [`openAppleHealthSettings()`](#openapplehealthsettings)
 * [`openHealthConnectSettings()`](#openhealthconnectsettings)
 * [`showHealthConnectInPlayStore()`](#showhealthconnectinplaystore)
-* [`getCharacteristics()`](#getcharacteristics)
+* [`getCharacteristics(...)`](#getcharacteristics)
 * [`queryAggregated(...)`](#queryaggregated)
 * [`queryWorkouts(...)`](#queryworkouts)
 * [`queryLatestSample(...)`](#querylatestsample)
@@ -331,6 +331,7 @@ openHealthConnectSettings() => Promise<void>
 ```
 
 Opens the Google Health Connect app
+iOS: Aliases openAppleHealthSettings().
 
 --------------------
 
@@ -342,18 +343,21 @@ showHealthConnectInPlayStore() => Promise<void>
 ```
 
 Opens the Google Health Connect app in PlayStore
+iOS: Resolves without action.
 
 --------------------
 
 
-### getCharacteristics()
+### getCharacteristics(...)
 
 ```typescript
-getCharacteristics(request?: CharacteristicsRequest) => Promise<CharacteristicsResponse>
+getCharacteristics(request?: CharacteristicsRequest | undefined) => Promise<CharacteristicsResponse>
 ```
 
-iOS only: Reads user characteristics such as biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use. Pass `fields` to request a single characteristic (e.g., date of birth) and keep permissions narrowly scoped; defaults to all when omitted.
+iOS only: Reads user characteristics such as biological sex, blood type, date of birth, Fitzpatrick skin type, and wheelchair use.
 Values are null when unavailable or permission was not granted. Android does not expose these characteristics; it returns `platformSupported: false` and a `platformMessage` for UI hints without emitting null values.
+
+Passing `fields` lets you request only specific characteristics (e.g., date of birth) to keep permissions scoped narrowly. Defaults to all characteristics when omitted.
 
 | Param         | Type                                                                      |
 | ------------- | ------------------------------------------------------------------------- |
@@ -430,6 +434,7 @@ queryWeight() => Promise<QueryLatestSampleResponse>
 ```
 
 Query latest weight sample
+Convenience wrapper around queryLatestSample({ dataType: 'weight' }).
 
 **Returns:** <code>Promise&lt;<a href="#querylatestsampleresponse">QueryLatestSampleResponse</a>&gt;</code>
 
@@ -443,6 +448,7 @@ queryHeight() => Promise<QueryLatestSampleResponse>
 ```
 
 Query latest height sample
+Convenience wrapper around queryLatestSample({ dataType: 'height' }).
 
 **Returns:** <code>Promise&lt;<a href="#querylatestsampleresponse">QueryLatestSampleResponse</a>&gt;</code>
 
@@ -456,6 +462,7 @@ queryHeartRate() => Promise<QueryLatestSampleResponse>
 ```
 
 Query latest heart rate sample
+Convenience wrapper around queryLatestSample({ dataType: 'heart-rate' }).
 
 **Returns:** <code>Promise&lt;<a href="#querylatestsampleresponse">QueryLatestSampleResponse</a>&gt;</code>
 
@@ -469,6 +476,7 @@ querySteps() => Promise<QueryLatestSampleResponse>
 ```
 
 Query latest steps sample
+Convenience wrapper around queryLatestSample({ dataType: 'steps' }).
 
 **Returns:** <code>Promise&lt;<a href="#querylatestsampleresponse">QueryLatestSampleResponse</a>&gt;</code>
 
@@ -529,13 +537,6 @@ Save user-provided body metrics to the health platform.
 | **`permissions`** | <code>HealthPermission[]</code> |
 
 
-#### CharacteristicsRequest
-
-| Prop         | Type                                                                 | Description                                                |
-| ------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| **`fields`** | <code><a href="#characteristicfield">CharacteristicField</a>[]</code> | Characteristics to query; defaults to all when unspecified |
-
-
 #### CharacteristicsResponse
 
 | Prop                      | Type                                                                                    | Description                                                                                                                             |
@@ -547,6 +548,13 @@ Save user-provided body metrics to the health platform.
 | **`wheelchairUse`**       | <code><a href="#healthwheelchairuse">HealthWheelchairUse</a> \| null</code>             |                                                                                                                                         |
 | **`platformSupported`**   | <code>boolean</code>                                                                    | Indicates whether the platform exposes these characteristics via the plugin (true on iOS, false on Android).                            |
 | **`platformMessage`**     | <code>string</code>                                                                     | Optional platform-specific message; on Android we return a user-facing note explaining that values remain empty unless synced from iOS. |
+
+
+#### CharacteristicsRequest
+
+| Prop         | Type                               | Description                                                             |
+| ------------ | ---------------------------------- | ----------------------------------------------------------------------- |
+| **`fields`** | <code>CharacteristicField[]</code> | Characteristics to query. Defaults to all characteristics when omitted. |
 
 
 #### QueryAggregatedResponse
@@ -695,11 +703,6 @@ Construct a type with a set of properties K of type T
 <code>{ [P in K]: T; }</code>
 
 
-#### CharacteristicField
-
-<code>'biologicalSex' | 'bloodType' | 'dateOfBirth' | 'fitzpatrickSkinType' | 'wheelchairUse'</code>
-
-
 #### HealthPermission
 
 <code>'READ_STEPS' | 'READ_WORKOUTS' | 'WRITE_WORKOUTS' | 'READ_ACTIVE_CALORIES' | 'WRITE_ACTIVE_CALORIES' | 'READ_TOTAL_CALORIES' | 'WRITE_TOTAL_CALORIES' | 'READ_DISTANCE' | 'WRITE_DISTANCE' | 'READ_WEIGHT' | 'WRITE_WEIGHT' | 'READ_HEIGHT' | 'WRITE_HEIGHT' | 'READ_HEART_RATE' | 'WRITE_HEART_RATE' | 'READ_RESTING_HEART_RATE' | 'WRITE_RESTING_HEART_RATE' | 'READ_ROUTE' | 'WRITE_ROUTE' | 'READ_MINDFULNESS' | 'READ_HRV' | 'READ_BLOOD_PRESSURE' | 'READ_BASAL_CALORIES' | 'READ_RESPIRATORY_RATE' | 'READ_OXYGEN_SATURATION' | 'READ_BLOOD_GLUCOSE' | 'READ_BODY_TEMPERATURE' | 'READ_BASAL_BODY_TEMPERATURE' | 'READ_BODY_FAT' | 'WRITE_BODY_FAT' | 'READ_FLOORS_CLIMBED' | 'READ_SLEEP' | 'READ_EXERCISE_TIME' | 'READ_BIOLOGICAL_SEX' | 'READ_BLOOD_TYPE' | 'READ_DATE_OF_BIRTH' | 'READ_FITZPATRICK_SKIN_TYPE' | 'READ_WHEELCHAIR_USE'</code>
@@ -723,6 +726,11 @@ Construct a type with a set of properties K of type T
 #### HealthWheelchairUse
 
 <code>'wheelchair_user' | 'not_wheelchair_user' | 'not_set' | 'unknown'</code>
+
+
+#### CharacteristicField
+
+<code>'biologicalSex' | 'bloodType' | 'dateOfBirth' | 'fitzpatrickSkinType' | 'wheelchairUse'</code>
 
 
 #### LatestDataType
