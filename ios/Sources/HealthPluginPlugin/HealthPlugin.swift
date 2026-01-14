@@ -809,7 +809,9 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        healthStore.requestAuthorization(toShare: shareTypes, read: nil) { [weak self] success, error in
+        // Preserve read access for these types when requesting write permissions.
+        let readTypes = Set(shareTypes.map { $0 as HKObjectType })
+        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { [weak self] success, error in
             guard let self = self else { return }
             DispatchQueue.main.async {
                 if let error = error {

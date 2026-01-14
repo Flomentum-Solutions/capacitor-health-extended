@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.8.1] – 2026-01-14
+### Added
+- None
+
+### Fixed
+- iOS `saveMetrics` now requests read access for the same metric types when asking for write authorization, preventing read permissions from being dropped after a write prompt.
+
+### Security
+- None
+
+---
+
 ## [0.8.0] – 2026-01-14
 ### Added
 - Documentation note and TypeScript helper snippet for iOS optimistic read permissions, plus guidance to show a "no data" hint when queries return empty.

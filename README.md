@@ -547,6 +547,7 @@ saveMetrics(request: SaveMetricsRequest) => Promise<SaveMetricsResponse>
 ```
 
 Save user-provided body metrics to the health platform.
+iOS: Requests read access for the same metric types when writing to preserve read permissions.
 
 | Param         | Type                                                              |
 | ------------- | ----------------------------------------------------------------- |
