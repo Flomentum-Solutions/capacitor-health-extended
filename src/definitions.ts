@@ -8,7 +8,12 @@ export interface HealthPlugin {
   isHealthAvailable(): Promise<{ available: boolean }>;
 
   /**
-   * Android only: Returns for each given permission, if it was granted by the underlying health API
+   * Returns whether each permission is granted.
+   * Android: Uses Health Connect grant state.
+   * iOS: Write permissions are strict. Read permissions for sample types are optimistic because HealthKit does not
+   * distinguish denied vs no data; this returns false only when the read permission is not determined. For
+   * characteristics, this probes access and returns false when denied.
+   * UX tip: If this returns true but a query yields no results, show a hint to check Apple Health settings.
    * @param permissions permissions to query
    */
   checkHealthPermissions(permissions: PermissionsRequest): Promise<PermissionResponse>;

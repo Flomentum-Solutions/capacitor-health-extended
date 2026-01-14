@@ -70,27 +70,93 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        var result: [String: String] = [:]
+        var result: [String: Bool] = [:]
 
         for permission in permissions {
-            let hkTypes = permissionToHKObjectType(permission) + permissionToHKSampleType(permission)
-            for type in hkTypes {
-                let status = healthStore.authorizationStatus(for: type)
+            // Resolve Mappings
+            let readTypes = permissionToHKObjectType(permission)
+            let shareTypes = permissionToHKSampleType(permission)
+            
+            // Prevent invalid/typo permissions from defaulting to "true"
+            if readTypes.isEmpty && shareTypes.isEmpty {
+                print("⚡️ [HealthPlugin] Warning: Permission '\(permission)' is not mapped to any HealthKit types.")
+                result[permission] = false
+                continue
+            }
 
-                switch status {
-                case .notDetermined:
-                    result[permission] = "notDetermined"
-                case .sharingDenied:
-                    result[permission] = "denied"
-                case .sharingAuthorized:
-                    result[permission] = "authorized"
-                @unknown default:
-                    result[permission] = "unknown"
+            // Determine Intent (Write vs Read)
+            // If the permission maps to any shareable types, treat it as a Write request.
+            let isWriteRequest = !shareTypes.isEmpty
+            
+            var isGranted = true
+
+            if isWriteRequest {
+                // WRITE LOGIC: Strict
+                // Multi-type permissions must be All-or-Nothing for data integrity.
+                for type in shareTypes {
+                    if healthStore.authorizationStatus(for: type) != .sharingAuthorized {
+                        isGranted = false
+                        break
+                    }
+                }
+            } else {
+                // READ LOGIC: Hybrid (Strict Characteristic / Optimistic Sample)
+                for type in readTypes {
+                    if let charType = type as? HKCharacteristicType {
+                        // Characteristics: Strict Probe
+                        // We strictly check these because they throw explicit errors on denial.
+                        if !isCharacteristicAuthorized(charType) {
+                            isGranted = false
+                            break
+                        }
+                    } else {
+                        // Sample Types: Optimistic Check
+                        // Strategy:
+                        // - If .notDetermined: We definitely need to ask. Return false.
+                        // - If .sharingDenied: User explicitly denied OR it's a read-only masking. 
+                        //   We MUST return 'true' here. If we return 'false', the app will loop 
+                        //   requests forever because we cannot distinguish Denied from "No Data".
+                        if healthStore.authorizationStatus(for: type) == .notDetermined {
+                            isGranted = false
+                            break
+                        }
+                    }
                 }
             }
+            
+            result[permission] = isGranted
         }
 
         call.resolve(["permissions": result])
+    }
+
+    // Helper: Accurately checks Characteristic read access by attempting a fetch.
+    private func isCharacteristicAuthorized(_ type: HKCharacteristicType) -> Bool {
+        do {
+            switch type.identifier {
+            case HKCharacteristicTypeIdentifier.biologicalSex.rawValue:
+                _ = try healthStore.biologicalSex()
+            case HKCharacteristicTypeIdentifier.bloodType.rawValue:
+                _ = try healthStore.bloodType()
+            case HKCharacteristicTypeIdentifier.dateOfBirth.rawValue:
+                _ = try healthStore.dateOfBirthComponents()
+            case HKCharacteristicTypeIdentifier.fitzpatrickSkinType.rawValue:
+                _ = try healthStore.fitzpatrickSkinType()
+            case HKCharacteristicTypeIdentifier.wheelchairUse.rawValue:
+                _ = try healthStore.wheelchairUse()
+            default:
+                // Unknown characteristic identifiers should default to false to surface errors.
+                print("⚡️ [HealthPlugin] Warning: Unknown characteristic type probed: \(type.identifier)")
+                return false
+            }
+            return true
+        } catch let error as HKError {
+            // If the system explicitly says "Authorization Denied", we know for sure.
+            return error.code != .errorAuthorizationDenied
+        } catch {
+            // Other errors (device not supported, etc) implies we can't read it.
+            return false
+        }
     }
     
     @objc func requestHealthPermissions(_ call: CAPPluginCall) {

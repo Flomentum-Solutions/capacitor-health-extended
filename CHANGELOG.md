@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.8.0] – 2026-01-14
+### Added
+- Documentation note and TypeScript helper snippet for iOS optimistic read permissions, plus guidance to show a "no data" hint when queries return empty.
+
+### Changed
+- iOS `checkHealthPermissions` now reports write permissions strictly and read permissions optimistically for sample types, returning false only when the read permission is not determined; invalid permission strings return false.
+
+### Security
+- None
+
+---
+
 ## [0.7.7] – 2026-01-12
 ### Added
 - None

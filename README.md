@@ -227,6 +227,38 @@ class PermissionsRationaleActivity : AppCompatActivity() {
 
 This setup ensures your WebView will load HTTPS content securely and complies with Android's default network security policy.
 
+## iOS read-permission UX hint
+
+On iOS, `checkHealthPermissions` is optimistic for read sample permissions because HealthKit does not distinguish
+denied access from empty data. If a query returns no results, prompt the user to verify Apple Health settings.
+
+```typescript
+import { Health, type HealthPermission } from '@flomentumsolutions/capacitor-health-extended';
+
+const NO_DATA_HINT =
+  'No data found. If you believe this is an error, please verify your settings in Apple Health.';
+
+export async function queryWithHealthEmptyHint<T>(
+  permission: HealthPermission,
+  query: () => Promise<T>,
+  isEmpty: (result: T) => boolean,
+  showHint: (message: string) => void
+): Promise<T | null> {
+  const { permissions } = await Health.checkHealthPermissions({ permissions: [permission] });
+  if (!permissions[permission]) {
+    return null;
+  }
+
+  const result = await query();
+
+  if (isEmpty(result)) {
+    showHint(NO_DATA_HINT);
+  }
+
+  return result;
+}
+```
+
 ## API
 ```
 <docgen-index>
@@ -276,7 +308,12 @@ See showHealthConnectInPlayStore()
 checkHealthPermissions(permissions: PermissionsRequest) => Promise<PermissionResponse>
 ```
 
-Android only: Returns for each given permission, if it was granted by the underlying health API
+Returns whether each permission is granted.
+Android: Uses Health Connect grant state.
+iOS: Write permissions are strict. Read permissions for sample types are optimistic because HealthKit does not
+distinguish denied vs no data; this returns false only when the read permission is not determined. For
+characteristics, this probes access and returns false when denied.
+UX tip: If this returns true but a query yields no results, show a hint to check Apple Health settings.
 
 | Param             | Type                                                              | Description          |
 | ----------------- | ----------------------------------------------------------------- | -------------------- |
