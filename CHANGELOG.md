@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.8.2] – 2026-01-18
+### Added
+- None
+
+### Fixed
+- Move to Gradle 9.0.0 and associated changes
+
+### Security
+- None
+
+---
+
 ## [0.8.1] – 2026-01-14
 ### Added
 - None
