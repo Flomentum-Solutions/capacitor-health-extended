@@ -2064,75 +2064,102 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         healthStore.execute(heartRateQuery)
     }
     
-    // MARK: - Query Route Data
-    private func queryRoute(for workout: HKWorkout, completion: @escaping @Sendable ([[String: Any]], String?) -> Void) {
-        let routeType = HKSeriesType.workoutRoute()
-        let predicate = HKQuery.predicateForObjects(from: workout)
-        
-        let routeQuery = HKSampleQuery(sampleType: routeType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { [weak self] _, samples, error in
-            guard let self = self else { return }
-            if let routes = samples as? [HKWorkoutRoute], error == nil {
-                let routeDispatchGroup = DispatchGroup()
-                let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.allLocations")
-                var allLocations: [[String: Any]] = []
-                
-                for route in routes {
-                    routeDispatchGroup.enter()
-                    self.queryLocations(for: route) { locations in
-                        allLocationsQueue.async {
-                            allLocations.append(contentsOf: locations)
-                        }
-                        routeDispatchGroup.leave()
+ // MARK: - Query Route Data
+private func queryRoute(for workout: HKWorkout, completion: @escaping @Sendable ([[String: Any]], String?) -> Void) {
+    let routeType = HKSeriesType.workoutRoute()
+    let predicate = HKQuery.predicateForObjects(from: workout)
+    
+    let routeQuery = HKSampleQuery(sampleType: routeType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { [weak self] _, samples, error in
+        guard let self = self else { return }
+        if let routes = samples as? [HKWorkoutRoute], error == nil {
+            let routeDispatchGroup = DispatchGroup()
+            let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.allLocations")
+            var allLocations: [[String: Any]] = []
+            
+            for route in routes {
+                routeDispatchGroup.enter()
+                self.queryLocations(for: route) { locations in
+                    allLocationsQueue.async {
+                        allLocations.append(contentsOf: locations)
+                        routeDispatchGroup.leave()  // ← MOVED INSIDE the async block
                     }
                 }
-                routeDispatchGroup.notify(queue: .main) {
+            }
+            routeDispatchGroup.notify(queue: .main) {
+                allLocationsQueue.sync {  // ← Final sync read to ensure consistency
                     completion(allLocations, nil)
                 }
-            } else {
-                DispatchQueue.main.async {
-                    completion([], error?.localizedDescription)
-                }
+            }
+        } else {
+            DispatchQueue.main.async {
+                completion([], error?.localizedDescription)
             }
         }
-        
-        healthStore.execute(routeQuery)
     }
     
+    healthStore.execute(routeQuery)
+}
+
+    
     // MARK: - Query Route Locations
-    private func queryLocations(for route: HKWorkoutRoute, completion: @escaping @Sendable ([[String: Any]]) -> Void) {
-        let locationQuery = HKWorkoutRouteQuery(route: route) { [weak self] _, locations, done, error in
-            guard let self = self else { return }
-            guard let locations = locations, error == nil else {
-                DispatchQueue.main.async {
-                    completion([])
-                }
-                return
+private func queryLocations(for route: HKWorkoutRoute, completion: @escaping @Sendable ([[String: Any]]) -> Void) {
+    // CRITICAL FIX: Declare accumulator OUTSIDE all closures
+    // This allows data to persist across multiple batch callbacks from iOS
+    var allLocations: [[String: Any]] = []
+    let locationsLock = NSLock()  // Thread-safe access to allLocations
+    
+    let locationQuery = HKWorkoutRouteQuery(route: route) { [weak self] query, locations, done, error in
+        guard self != nil else {
+            if done {
+                DispatchQueue.main.async { completion([]) }
             }
+            return
+        }
+        
+        // Handle error or no locations - but only complete when done
+        guard let locations = locations, error == nil else {
+            if done {
+                locationsLock.lock()
+                let finalLocations = allLocations
+                locationsLock.unlock()
+                DispatchQueue.main.async { completion(finalLocations) }
+            }
+            return
+        }
+        
+        // Thread-safe append of this batch
+        locationsLock.lock()
+        for location in locations {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            let locationDict: [String: Any] = [
+                "timestamp": formatter.string(from: location.timestamp),
+                "lat": location.coordinate.latitude,
+                "lng": location.coordinate.longitude,
+                "alt": location.altitude
+            ]
+            allLocations.append(locationDict)
+        }
+        let currentCount = allLocations.count
+        locationsLock.unlock()
+        
+        print("[HealthPlugin] Route batch: \(locations.count) pts, total: \(currentCount), done: \(done)")
 
-            // Process locations on the serial queue to avoid race conditions
-            self.routeSyncQueue.async {
-                var routeLocations: [[String: Any]] = []
-                
-                for location in locations {
-                    let locationDict: [String: Any] = [
-                        "timestamp": location.timestamp,
-                        "lat": location.coordinate.latitude,
-                        "lng": location.coordinate.longitude,
-                        "alt": location.altitude
-                    ]
-                    routeLocations.append(locationDict)
-                }
-
-                if done {
-                    DispatchQueue.main.async {
-                        completion(routeLocations)
-                    }
-                }
+        // Only return when iOS signals ALL batches are complete
+        if done {
+            locationsLock.lock()
+            let finalLocations = allLocations
+            locationsLock.unlock()
+            DispatchQueue.main.async {
+                completion(finalLocations)
             }
         }
-
-        healthStore.execute(locationQuery)
     }
+    
+    healthStore.execute(locationQuery)
+}
+
     
     
     let workoutTypeMapping: [UInt : String] =  [
