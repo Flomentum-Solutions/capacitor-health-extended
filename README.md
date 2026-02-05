@@ -626,9 +626,10 @@ iOS: Requests read access for the same metric types when writing to preserve rea
 
 #### QueryWorkoutResponse
 
-| Prop           | Type                   |
-| -------------- | ---------------------- |
-| **`workouts`** | <code>Workout[]</code> |
+| Prop           | Type                                                            |
+| -------------- | --------------------------------------------------------------- |
+| **`workouts`** | <code>Workout[]</code>                                          |
+| **`errors`**   | <code><a href="#record">Record</a>&lt;string, string&gt;</code> |
 
 
 #### Workout

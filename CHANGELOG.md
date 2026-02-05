@@ -5,6 +5,17 @@ This project adheres to [Semantic Versioning](https://semver.org/) and the
 
 ---
 
+## [0.8.3] – 2026-02-05
+### Added
+- `queryWorkouts` now returns an optional `errors` object to surface route/heart-rate issues for debugging.
+
+### Fixed
+- iOS workout route queries now accumulate all `HKWorkoutRouteQuery` batches and return merged, time-ordered points.
+- Android route permissions now map to Health Connect `READ_EXERCISE_ROUTE`, and route points are time-ordered.
+
+### Security
+- None
+
 ## [0.8.2] – 2026-01-18
 ### Added
 - None

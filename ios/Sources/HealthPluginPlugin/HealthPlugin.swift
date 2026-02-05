@@ -33,9 +33,6 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
     
     let healthStore = HKHealthStore()
     
-    /// Serial queue to make route‑location mutations thread‑safe without locks
-    private let routeSyncQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.routeSync")
-
     private enum CharacteristicField: String, CaseIterable {
         case biologicalSex
         case bloodType
@@ -2075,18 +2072,30 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
                 let routeDispatchGroup = DispatchGroup()
                 let allLocationsQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.allLocations")
                 var allLocations: [[String: Any]] = []
+                var routeErrors: [String] = []
                 
                 for route in routes {
                     routeDispatchGroup.enter()
-                    self.queryLocations(for: route) { locations in
+                    self.queryLocations(for: route) { locations, routeError in
                         allLocationsQueue.async {
                             allLocations.append(contentsOf: locations)
+                            if let routeError = routeError {
+                                routeErrors.append(routeError)
+                            }
+                            routeDispatchGroup.leave()
                         }
-                        routeDispatchGroup.leave()
                     }
                 }
-                routeDispatchGroup.notify(queue: .main) {
-                    completion(allLocations, nil)
+                routeDispatchGroup.notify(queue: allLocationsQueue) {
+                    let mergedLocations = allLocations.sorted {
+                        let lhs = $0["timestamp"] as? Date ?? Date.distantPast
+                        let rhs = $1["timestamp"] as? Date ?? Date.distantPast
+                        return lhs < rhs
+                    }
+                    let errorMessage = routeErrors.isEmpty ? nil : routeErrors.joined(separator: "; ")
+                    DispatchQueue.main.async {
+                        completion(mergedLocations, errorMessage)
+                    }
                 }
             } else {
                 DispatchQueue.main.async {
@@ -2099,33 +2108,34 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     
     // MARK: - Query Route Locations
-    private func queryLocations(for route: HKWorkoutRoute, completion: @escaping @Sendable ([[String: Any]]) -> Void) {
-        let locationQuery = HKWorkoutRouteQuery(route: route) { [weak self] _, locations, done, error in
-            guard let self = self else { return }
-            guard let locations = locations, error == nil else {
-                DispatchQueue.main.async {
-                    completion([])
-                }
-                return
-            }
+    private func queryLocations(for route: HKWorkoutRoute, completion: @escaping @Sendable ([[String: Any]], String?) -> Void) {
+        var routeLocations: [[String: Any]] = []
+        var routeError: String?
+        let syncQueue = DispatchQueue(label: "com.flomentumsolutions.capacitorhealthextended.routeSync.\(route.uuid.uuidString)")
 
-            // Process locations on the serial queue to avoid race conditions
-            self.routeSyncQueue.async {
-                var routeLocations: [[String: Any]] = []
-                
-                for location in locations {
-                    let locationDict: [String: Any] = [
-                        "timestamp": location.timestamp,
-                        "lat": location.coordinate.latitude,
-                        "lng": location.coordinate.longitude,
-                        "alt": location.altitude
-                    ]
-                    routeLocations.append(locationDict)
+        let locationQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
+            syncQueue.async {
+                if let error = error {
+                    if routeError == nil {
+                        routeError = error.localizedDescription
+                    }
+                } else if let locations = locations {
+                    for location in locations {
+                        let locationDict: [String: Any] = [
+                            "timestamp": location.timestamp,
+                            "lat": location.coordinate.latitude,
+                            "lng": location.coordinate.longitude,
+                            "alt": location.altitude
+                        ]
+                        routeLocations.append(locationDict)
+                    }
                 }
 
                 if done {
+                    let finalLocations = routeLocations
+                    let finalError = routeError
                     DispatchQueue.main.async {
-                        completion(routeLocations)
+                        completion(finalLocations, finalError)
                     }
                 }
             }

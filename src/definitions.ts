@@ -181,6 +181,7 @@ export interface RouteSample {
 
 export interface QueryWorkoutResponse {
   workouts: Workout[];
+  errors?: Record<string, string>;
 }
 
 export type WorkoutActivityType =

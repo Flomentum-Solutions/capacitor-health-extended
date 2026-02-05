@@ -100,7 +100,7 @@ enum class CapHealthPermission {
         Permission(alias = "READ_RESTING_HEART_RATE", strings = ["android.permission.health.READ_RESTING_HEART_RATE"]),
         Permission(alias = "READ_HRV", strings = ["android.permission.health.READ_HEART_RATE_VARIABILITY"]),
         Permission(alias = "READ_BLOOD_PRESSURE", strings = ["android.permission.health.READ_BLOOD_PRESSURE"]),
-        Permission(alias = "READ_ROUTE", strings = ["android.permission.health.READ_EXERCISE"]),
+        Permission(alias = "READ_ROUTE", strings = ["android.permission.health.READ_EXERCISE_ROUTE"]),
         Permission(alias = "READ_MINDFULNESS", strings = ["android.permission.health.READ_MINDFULNESS"]),
         Permission(alias = "READ_RESPIRATORY_RATE", strings = ["android.permission.health.READ_RESPIRATORY_RATE"]),
         Permission(alias = "READ_OXYGEN_SATURATION", strings = ["android.permission.health.READ_OXYGEN_SATURATION"]),
@@ -146,7 +146,7 @@ class HealthPlugin : Plugin() {
         CapHealthPermission.READ_EXERCISE_TIME to HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         CapHealthPermission.READ_HRV to HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
         CapHealthPermission.READ_BLOOD_PRESSURE to HealthPermission.getReadPermission(BloodPressureRecord::class),
-        CapHealthPermission.READ_ROUTE to HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        CapHealthPermission.READ_ROUTE to HealthPermission.PERMISSION_READ_EXERCISE_ROUTE,
         CapHealthPermission.READ_MINDFULNESS to HealthPermission.getReadPermission(MindfulnessSessionRecord::class),
         CapHealthPermission.READ_RESTING_HEART_RATE to HealthPermission.getReadPermission(RestingHeartRateRecord::class),
         CapHealthPermission.READ_RESPIRATORY_RATE to HealthPermission.getReadPermission(RespiratoryRateRecord::class),
@@ -1810,10 +1810,29 @@ class HealthPlugin : Plugin() {
             try {
                 // Check permission for heart rate before loop
                 val hasHeartRatePermission = hasPermission(CapHealthPermission.READ_HEART_RATE)
+                val hasWorkoutsPermission =
+                    if (includeRoute) hasPermission(CapHealthPermission.READ_WORKOUTS) else true
+                val hasRoutePermission =
+                    if (includeRoute) hasPermission(CapHealthPermission.READ_ROUTE) else true
+                val errors = JSObject()
 
                 // Log warning if requested data but permission not granted
                 if (includeHeartRate && !hasHeartRatePermission) {
-                    Log.w(tag, "queryWorkouts: Heart rate requested but not permitted")
+                    val message = "Heart rate requested but READ_HEART_RATE permission missing"
+                    Log.w(tag, "queryWorkouts: $message")
+                    errors.put("heart-rate", message)
+                }
+                if (includeRoute && (!hasWorkoutsPermission || !hasRoutePermission)) {
+                    val routeErrors = mutableListOf<String>()
+                    if (!hasWorkoutsPermission) {
+                        routeErrors.add("READ_WORKOUTS permission missing")
+                    }
+                    if (!hasRoutePermission) {
+                        routeErrors.add("READ_ROUTE permission missing")
+                    }
+                    val message = "Route requested but ${routeErrors.joinToString("; ")}"
+                    Log.w(tag, "queryWorkouts: $message")
+                    errors.put("route", message)
                 }
 
                 // Query workouts (exercise sessions)
@@ -1863,10 +1882,8 @@ class HealthPlugin : Plugin() {
                     }
 
                     /* Updated route logic for Health Connect RC02 */
-                    if (includeRoute) {
-                        if (!hasPermission(CapHealthPermission.READ_WORKOUTS)) {
-                            Log.w(tag, "queryWorkouts: Route requested but READ_WORKOUTS permission missing")
-                        } else if (workout.exerciseRouteResult is ExerciseRouteResult.Data) {
+                    if (includeRoute && hasWorkoutsPermission && hasRoutePermission) {
+                        if (workout.exerciseRouteResult is ExerciseRouteResult.Data) {
                             val data = workout.exerciseRouteResult as ExerciseRouteResult.Data
                             val routeJson = queryRouteForWorkout(data)
                             if (routeJson.length() > 0) {
@@ -1880,6 +1897,7 @@ class HealthPlugin : Plugin() {
 
                 val result = JSObject()
                 result.put("workouts", workoutsArray)
+                result.put("errors", errors)
                 call.resolve(result)
 
             } catch (e: Exception) {
@@ -1960,7 +1978,8 @@ class HealthPlugin : Plugin() {
     private fun queryRouteForWorkout(routeResult: ExerciseRouteResult.Data): JSArray {
 
         val routeArray = JSArray()
-        for (record in routeResult.exerciseRoute.route) {
+        val orderedRoute = routeResult.exerciseRoute.route.sortedBy { it.time }
+        for (record in orderedRoute) {
             val routeObject = JSObject()
             routeObject.put("timestamp", record.time.toString())
             routeObject.put("lat", record.latitude)
