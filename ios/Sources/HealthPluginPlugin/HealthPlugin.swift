@@ -747,7 +747,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             let value = quantitySample.quantity.doubleValue(for: unit)
             let timestamp = quantitySample.startDate.timeIntervalSince1970 * 1000
 
-            print("⚡️ [HealthPlugin] Successfully fetched \(dataTypeString): value=\(value), unit=\(unit.unitString)")
+            print("⚡️ [HealthPlugin] Successfully fetched \(dataTypeString)")
 
             call.resolve([
                 "value": value,
