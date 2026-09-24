@@ -799,7 +799,7 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
             heightCm != nil ? HKObjectType.quantityType(forIdentifier: .height) : nil,
             bodyFatPercent != nil ? HKObjectType.quantityType(forIdentifier: .bodyFatPercentage) : nil,
             restingHeartRate != nil ? HKObjectType.quantityType(forIdentifier: .restingHeartRate) : nil
-        ].compactMap { $0 as? HKSampleType }.reduce(into: Set<HKSampleType>()) { $0.insert($1) }
+        ].compactMap { $0 }.reduce(into: Set<HKSampleType>()) { $0.insert($1) }
 
         guard !shareTypes.isEmpty else {
             call.reject("No valid metric types available on this device")
@@ -902,13 +902,13 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
         case "WRITE_ROUTE":
             return  [HKSeriesType.workoutRoute()].compactMap{$0}
         case "WRITE_WEIGHT":
-            return [HKObjectType.quantityType(forIdentifier: .bodyMass)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .bodyMass)].compactMap { $0 }
         case "WRITE_HEIGHT":
-            return [HKObjectType.quantityType(forIdentifier: .height)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .height)].compactMap { $0 }
         case "WRITE_BODY_FAT":
-            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 }
         case "WRITE_RESTING_HEART_RATE":
-            return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 }
         case "READ_DISTANCE":
             return [
                 HKObjectType.quantityType(forIdentifier: .distanceCycling),
@@ -1029,33 +1029,33 @@ public class HealthPlugin: CAPPlugin, CAPBridgedPlugin {
     func permissionToHKSampleType(_ permission: String) -> [HKSampleType] {
         switch permission {
         case "WRITE_WORKOUTS":
-            return [HKObjectType.workoutType()].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.workoutType()]
         case "WRITE_ACTIVE_CALORIES":
             fallthrough
         case "WRITE_TOTAL_CALORIES":
             return [
                 HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
                 HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)
-            ].compactMap { $0 as? HKSampleType }
+            ].compactMap { $0 }
         case "WRITE_DISTANCE":
             return [
                 HKObjectType.quantityType(forIdentifier: .distanceCycling),
                 HKObjectType.quantityType(forIdentifier: .distanceSwimming),
                 HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
                 HKObjectType.quantityType(forIdentifier: .distanceDownhillSnowSports)
-            ].compactMap { $0 as? HKSampleType }
+            ].compactMap { $0 }
         case "WRITE_HEART_RATE":
-            return [HKObjectType.quantityType(forIdentifier: .heartRate)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .heartRate)].compactMap { $0 }
         case "WRITE_ROUTE":
-            return [HKSeriesType.workoutRoute()].compactMap { $0 as? HKSampleType }
+            return [HKSeriesType.workoutRoute()]
         case "WRITE_WEIGHT":
-            return [HKObjectType.quantityType(forIdentifier: .bodyMass)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .bodyMass)].compactMap { $0 }
         case "WRITE_HEIGHT":
-            return [HKObjectType.quantityType(forIdentifier: .height)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .height)].compactMap { $0 }
         case "WRITE_BODY_FAT":
-            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)].compactMap { $0 }
         case "WRITE_RESTING_HEART_RATE":
-            return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 as? HKSampleType }
+            return [HKObjectType.quantityType(forIdentifier: .restingHeartRate)].compactMap { $0 }
         default:
             // Avoid requesting write/share authorization when only read permissions are supplied.
             return []

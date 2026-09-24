@@ -57,7 +57,7 @@
   ],
   "scripts": {
     "verify": "npm run verify:ios && npm run verify:android && npm run verify:web",
-    "verify:ios": "xcodebuild -scheme FlomentumSolutionsCapacitorHealthExtended -destination generic/platform=iOS",
+    "verify:ios": "xcodebuild -scheme FlomentumsolutionsCapacitorHealthExtended -destination generic/platform=iOS",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
     "verify:web": "npm run build",
     "lint": "npm run eslint && npm run prettier -- --check && npm run swiftlint -- lint",
@@ -90,6 +90,11 @@
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0"
+  },
+  "overrides": {
+    "xcode": {
+      "uuid": "^11.1.1"
+    }
   },
   "prettier": "@ionic/prettier-config",
   "swiftlint": "@ionic/swiftlint-config",
