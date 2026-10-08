@@ -146,7 +146,7 @@ class HealthPlugin : Plugin() {
         CapHealthPermission.READ_EXERCISE_TIME to HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         CapHealthPermission.READ_HRV to HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
         CapHealthPermission.READ_BLOOD_PRESSURE to HealthPermission.getReadPermission(BloodPressureRecord::class),
-        CapHealthPermission.READ_ROUTE to HealthPermission.PERMISSION_READ_EXERCISE_ROUTE,
+        CapHealthPermission.READ_ROUTE to HealthPermission.PERMISSION_READ_EXERCISE_ROUTES,
         CapHealthPermission.READ_MINDFULNESS to HealthPermission.getReadPermission(MindfulnessSessionRecord::class),
         CapHealthPermission.READ_RESTING_HEART_RATE to HealthPermission.getReadPermission(RestingHeartRateRecord::class),
         CapHealthPermission.READ_RESPIRATORY_RATE to HealthPermission.getReadPermission(RespiratoryRateRecord::class),
