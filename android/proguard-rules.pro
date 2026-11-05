@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Preserve plugin class and methods for Capacitor reflection in R8 release builds
+-keep public class com.flomentumsolutions.capacitorhealthextended.capacitor.HealthPlugin {
+    public <init>();
+    *;
+}
