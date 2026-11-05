@@ -3,6 +3,45 @@ All notable changes to **@flomentumsolutions/capacitor-health-extended** will be
 This project adheres to [Semantic Versioning](https://semver.org/) and the
 [Keep a Changelog](https://keepachangelog.com/) style guide.
 
+## [0.9.3] – 2026-11-04
+### Changed
+- **Capacitor 9 Migration**:
+  - Upgraded dependencies and peer dependencies to Capacitor 9 (`@capacitor/core`, `@capacitor/ios`, `@capacitor/android` @ `^9.0.0-beta.0`).
+  - iOS: Migrated `Package.swift` to source-first Swift Package Manager integration directly from `https://github.com/ionic-team/capacitor.git` (Capacitor 9+ deprecates `capacitor-swift-pm`).
+  - iOS: Raised minimum deployment target to iOS 16 (`Package.swift`, `FlomentumsolutionsCapacitorHealthExtended.podspec`) and removed `CapacitorCordova` dependency.
+  - Android: Upgraded to Android Gradle Plugin 9.2.1, Gradle wrapper 9.8.2, and `minSdkVersion = 26`.
+  - Android: Removed standalone Kotlin Gradle plugin from `android/build.gradle` (natively bundled by AGP 9).
+  - Android: Added consumer ProGuard rules (`android/proguard-rules.pro`) to preserve `HealthPlugin` during R8 minification, and included in published package distribution files.
+  - Android: Removed deprecated `package` attribute from `android/src/main/AndroidManifest.xml`.
+  - Tooling: Migrated ESLint configuration to ESLint 9 Flat Config (`eslint.config.cjs`) with `@ionic/eslint-config` `^0.5.0`.
+
+### Fixed
+- Formatting: Formatted `src/definitions.ts` to satisfy Prettier checks.
+
+### Security
+- Overrode transitive `minimatch` dependency to `^11.0.4` to remediate high-severity ReDoS vulnerability (GHSA-g3hv-75wg-m249), achieving 0 vulnerabilities across `npm audit`.
+
+---
+
+## [0.9.2] – 2026-11-04
+### Changed
+- Set project engine requirements to Node `>=24.0.0` with `.node-version` and `.nvmrc`.
+- Migrated GitHub Actions publishing workflow to npm Trusted Publishing using OpenID Connect (OIDC) and provenance attestation.
+
+---
+
+## [0.9.1] – 2026-09-24
+### Changed
+- Refactored health fetch logging to omit raw values and unit details for privacy.
+
+---
+
+## [0.9.0] – 2026-09-23
+### Changed
+- Refactored HealthKit sample type casting for cleaner Swift handling.
+- Corrected iOS scheme name and added Xcode workspace overrides for reliable verification builds.
+- Updated `package-lock.json` dependencies.
+
 ---
 
 ## [0.8.3] – 2026-02-05
