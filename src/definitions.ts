@@ -5,7 +5,10 @@ export interface HealthPlugin {
    * See showHealthConnectInPlayStore()
    *
    */
-  isHealthAvailable(): Promise<{ available: boolean }>;
+  isHealthAvailable(): Promise<{
+    available: boolean;
+    status?: 'AVAILABLE' | 'PROVIDER_UPDATE_REQUIRED' | 'UNAVAILABLE';
+  }>;
 
   /**
    * Returns whether each permission is granted.

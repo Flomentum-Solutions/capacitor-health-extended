@@ -1,6 +1,7 @@
 package com.flomentumsolutions.capacitorhealthextended.capacitor
 
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.health.connect.client.HealthConnectClient
@@ -100,7 +101,7 @@ enum class CapHealthPermission {
         Permission(alias = "READ_RESTING_HEART_RATE", strings = ["android.permission.health.READ_RESTING_HEART_RATE"]),
         Permission(alias = "READ_HRV", strings = ["android.permission.health.READ_HEART_RATE_VARIABILITY"]),
         Permission(alias = "READ_BLOOD_PRESSURE", strings = ["android.permission.health.READ_BLOOD_PRESSURE"]),
-        Permission(alias = "READ_ROUTE", strings = ["android.permission.health.READ_EXERCISE_ROUTE"]),
+        Permission(alias = "READ_ROUTE", strings = ["android.permission.health.READ_EXERCISE_ROUTES"]),
         Permission(alias = "READ_MINDFULNESS", strings = ["android.permission.health.READ_MINDFULNESS"]),
         Permission(alias = "READ_RESPIRATORY_RATE", strings = ["android.permission.health.READ_RESPIRATORY_RATE"]),
         Permission(alias = "READ_OXYGEN_SATURATION", strings = ["android.permission.health.READ_OXYGEN_SATURATION"]),
@@ -146,7 +147,7 @@ class HealthPlugin : Plugin() {
         CapHealthPermission.READ_EXERCISE_TIME to HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         CapHealthPermission.READ_HRV to HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
         CapHealthPermission.READ_BLOOD_PRESSURE to HealthPermission.getReadPermission(BloodPressureRecord::class),
-        CapHealthPermission.READ_ROUTE to HealthPermission.PERMISSION_READ_EXERCISE_ROUTE,
+        CapHealthPermission.READ_ROUTE to HealthPermission.PERMISSION_READ_EXERCISE_ROUTES,
         CapHealthPermission.READ_MINDFULNESS to HealthPermission.getReadPermission(MindfulnessSessionRecord::class),
         CapHealthPermission.READ_RESTING_HEART_RATE to HealthPermission.getReadPermission(RestingHeartRateRecord::class),
         CapHealthPermission.READ_RESPIRATORY_RATE to HealthPermission.getReadPermission(RespiratoryRateRecord::class),
@@ -209,11 +210,12 @@ class HealthPlugin : Plugin() {
     // Check if Google Health Connect is available. Must be called before anything else
     @PluginMethod
     fun isHealthAvailable(call: PluginCall) {
+        val status = HealthConnectClient.getSdkStatus(context)
+        available = (status == HealthConnectClient.SDK_AVAILABLE)
 
-        if (!available) {
+        if (available && !::healthConnectClient.isInitialized) {
             try {
                 healthConnectClient = HealthConnectClient.getOrCreate(context)
-                available = true
             } catch (e: Exception) {
                 Log.e(tag, "isHealthAvailable: Failed to initialize HealthConnectClient", e)
                 available = false
@@ -222,12 +224,28 @@ class HealthPlugin : Plugin() {
 
         val result = JSObject()
         result.put("available", available)
+        when (status) {
+            HealthConnectClient.SDK_AVAILABLE -> result.put("status", "AVAILABLE")
+            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> result.put("status", "PROVIDER_UPDATE_REQUIRED")
+            else -> result.put("status", "UNAVAILABLE")
+        }
         call.resolve(result)
     }
 
     // Helper to ensure HealthConnectClient is ready; attempts init lazily
     private fun ensureClientInitialized(call: PluginCall): Boolean {
-        if (available) return true
+        if (available && ::healthConnectClient.isInitialized) return true
+
+        val status = HealthConnectClient.getSdkStatus(context)
+        if (status != HealthConnectClient.SDK_AVAILABLE) {
+            val msg = if (status == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
+                "Health Connect provider update required."
+            } else {
+                "Health Connect is not available on this device."
+            }
+            call.reject(msg)
+            return false
+        }
 
         return try {
             healthConnectClient = HealthConnectClient.getOrCreate(context)
@@ -302,13 +320,15 @@ class HealthPlugin : Plugin() {
 
         requestPermissionContext.set(RequestPermissionContext(requestedCaps, call))
 
-        // Show rationale if available
-        context.packageManager?.let { pm ->
-            Intent("androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE").apply {
-                setPackage("com.google.android.apps.healthdata")
-            }.takeIf { pm.resolveActivity(it, 0) != null }
-                ?.also { context.startActivity(it) }
-                ?: Log.w(tag, "Health Connect rationale screen not found")
+        // Show rationale on Android 13 APK if available
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            context.packageManager?.let { pm ->
+                Intent("androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE").apply {
+                    setPackage("com.google.android.apps.healthdata")
+                }.takeIf { pm.resolveActivity(it, 0) != null }
+                    ?.also { context.startActivity(it) }
+                    ?: Log.w(tag, "Health Connect rationale screen not found")
+            }
         }
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -323,6 +343,7 @@ class HealthPlugin : Plugin() {
         try {
             val intent = Intent().apply {
                 action = HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
             call.resolve()
@@ -337,9 +358,15 @@ class HealthPlugin : Plugin() {
         openHealthConnectSettings(call)
     }
 
-    // Open the Google Play Store to install Health Connect
+    // Open the Google Play Store to install Health Connect (Android 13 and below)
     @PluginMethod
     fun showHealthConnectInPlayStore(call: PluginCall) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // On Android 14+, Health Connect is built into the OS.
+            // Direct user to system settings instead.
+            openHealthConnectSettings(call)
+            return
+        }
         val uri =
             "https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata".toUri()
         val intent = Intent(Intent.ACTION_VIEW, uri)

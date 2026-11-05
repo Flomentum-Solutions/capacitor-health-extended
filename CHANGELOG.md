@@ -3,7 +3,22 @@ All notable changes to **@flomentumsolutions/capacitor-health-extended** will be
 This project adheres to [Semantic Versioning](https://semver.org/) and the
 [Keep a Changelog](https://keepachangelog.com/) style guide.
 
-## [0.9.3] – 2026-11-04
+## [0.9.5] – 2026-11-04
+### Changed
+- **Android 14 & Health Connect Framework Support**:
+  - `isHealthAvailable()` now evaluates `HealthConnectClient.getSdkStatus(context)` and returns a structured status (`AVAILABLE`, `PROVIDER_UPDATE_REQUIRED`, or `UNAVAILABLE`) alongside `available: boolean`.
+  - Added `Intent.FLAG_ACTIVITY_NEW_TASK` to `openHealthConnectSettings()` for reliable invocation from background/plugin contexts.
+  - On Android 14+ (API 34+), `showHealthConnectInPlayStore()` safely redirects to native system settings rather than attempting to open the obsolete Play Store APK listing.
+  - Gated legacy Android 13 APK rationale intent (`ACTION_SHOW_PERMISSIONS_RATIONALE`) to API < 34, relying on native system dialogs for Android 14+.
+
+### Fixed
+- **Exercise Route Permissions**:
+  - Aligned `READ_ROUTE` mapping to the official SDK constant `HealthPermission.PERMISSION_READ_EXERCISE_ROUTES` (`android.permission.health.READ_EXERCISE_ROUTES`), matching `PERMISSION_WRITE_EXERCISE_ROUTE`.
+  - Fixed Capacitor plugin annotation (`@CapacitorPlugin`) and `README.md` manifest documentation to use plural `READ_EXERCISE_ROUTES`, preventing permission grant failures on Android.
+
+---
+
+## [0.9.3-0.9.4] – 2026-11-04
 ### Changed
 - **Capacitor 9 Migration**:
   - Upgraded dependencies and peer dependencies to Capacitor 9 (`@capacitor/core`, `@capacitor/ios`, `@capacitor/android` @ `^9.0.0-beta.0`).
