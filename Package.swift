@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "FlomentumsolutionsCapacitorHealthExtended",
     platforms: [
-        .iOS(.v15)
+        .iOS(.v16)
     ],
     products: [
         .library(
@@ -13,15 +13,13 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "8.0.0")
+        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "9.0.0-beta.0")
     ],
     targets: [
         .target(
             name: "HealthPluginPlugin",
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
-                // Capacitor binary depends on Cordova; add it so Xcode/SPM can find the module.
-                .product(name: "Cordova", package: "capacitor-swift-pm")
             ],
             path: "ios/Sources/HealthPluginPlugin"
         )
